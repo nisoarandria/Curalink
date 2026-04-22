@@ -87,11 +87,16 @@ public class PatientPortalService {
 			String q,
 			LocalDate date) {
 		Patient patient = requireCurrentPatient(currentUser);
-		LocalDate effectiveDate = (date != null) ? date : LocalDate.now();
-		LocalDateTime start = effectiveDate.atStartOfDay();
-		LocalDateTime end = effectiveDate.plusDays(1).atStartOfDay();
 		String search = (q == null || q.isBlank()) ? "" : q.trim();
 		Pageable pageable = PageRequest.of(page, clampSize(size), Sort.by(Sort.Direction.ASC, "dateHeure"));
+		if (date == null) {
+			return PageResponse.from(rendezVousRepository.searchForPatientNoDate(
+					patient.getId(),
+					search,
+					pageable).map(PatientPortalService::toRendezVousResponse));
+		}
+		LocalDateTime start = date.atStartOfDay();
+		LocalDateTime end = date.plusDays(1).atStartOfDay();
 		return PageResponse.from(rendezVousRepository.searchForPatientByDate(
 				patient.getId(),
 				start,
