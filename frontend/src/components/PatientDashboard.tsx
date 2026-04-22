@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,25 +9,20 @@ import { PatientRecordView } from "./PatientMedicalRecord"
 import type { PatientRecord } from "./PatientMedicalRecord"
 import { useAuth } from "@/hooks/useAuth"
 import { logoutRequest } from "@/services/axiosInstance"
+import {
+  fetchServices,
+  fetchMedecinsByService,
+  fetchMedecinDisponibilites,
+  fetchServiceDisponibilites,
+  createRendezVous,
+  type ServiceOption,
+  type MedecinOption,
+  type MedecinDisponibilite,
+  type ServiceDisponibilite,
+} from "@/services/appointmentApi"
 
-type Service = "Médecine générale" | "Dermatologie" | "Cardiologie" | "Nutrition"
 type Step = 1 | 2 | 3
-
-type Appointment = {
-  id: string
-  date: string
-  heure: string
-  service: Service
-  medecin: string
-  statut: "demande" | "confirmé"
-}
-
-const doctorsByService: Record<Service, string[]> = {
-  "Médecine générale": ["Dr Rasoanaivo", "Dr Rakotondrazaka"],
-  Dermatologie: ["Dr Andriamparany"],
-  Cardiologie: ["Dr Rabearivelo"],
-  Nutrition: ["Dr Rasolofoniaina"],
-}
+type Parcours = "medecin" | "creneau" | null
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -68,40 +63,170 @@ export default function PatientDashboard() {
   const { logout } = useAuth()
   const [activeTab, setActiveTab] = useState<"rdv" | "chatbot" | "dossier" | "planning" | "ordonnances">("rdv")
   const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const [step, setStep] = useState<Step>(1)
-  const [service, setService] = useState<Service>("Médecine générale")
-  const [date, setDate] = useState(today)
-  const [doctor, setDoctor] = useState("")
-  const [quickSlot, setQuickSlot] = useState("09:00")
-  const [appointments, setAppointments] = useState<Appointment[]>([])
   const [symptoms, setSymptoms] = useState("")
   const [aiAnswer, setAiAnswer] = useState("")
 
-  const availableDoctors = useMemo(() => doctorsByService[service], [service])
+  // ── RDV wizard state ───────────────────────────────────────────────
+  const [step, setStep] = useState<Step>(1)
+  const [parcours, setParcours] = useState<Parcours>(null)
+
+  // Step 1 — services
+  const [services, setServices] = useState<ServiceOption[]>([])
+  const [selectedService, setSelectedService] = useState<ServiceOption | null>(null)
+  const [loadingServices, setLoadingServices] = useState(false)
+
+  // Step 2A — par médecin
+  const [medecins, setMedecins] = useState<MedecinOption[]>([])
+  const [selectedMedecin, setSelectedMedecin] = useState<MedecinOption | null>(null)
+  const [medecinSlots, setMedecinSlots] = useState<MedecinDisponibilite[]>([])
+  const [selectedSlot, setSelectedSlot] = useState<MedecinDisponibilite | null>(null)
+  const [loadingMedecins, setLoadingMedecins] = useState(false)
+  const [loadingSlots, setLoadingSlots] = useState(false)
+
+  // Step 2B — créneau rapide
+  const [quickDate, setQuickDate] = useState(today)
+  const [quickSlots, setQuickSlots] = useState<ServiceDisponibilite[]>([])
+  const [selectedQuickSlot, setSelectedQuickSlot] = useState<ServiceDisponibilite | null>(null)
+  const [loadingQuickSlots, setLoadingQuickSlots] = useState(false)
+
+  // Step 3 — confirmation
+  const [submitting, setSubmitting] = useState(false)
+  const [successMessage, setSuccessMessage] = useState("")
+  const [errorMessage, setErrorMessage] = useState("")
+
+  // ── Charger les services au montage ────────────────────────────────
+  useEffect(() => {
+    setLoadingServices(true)
+    fetchServices()
+      .then(setServices)
+      .catch(() => setErrorMessage("Impossible de charger les services."))
+      .finally(() => setLoadingServices(false))
+  }, [])
+
+  // ── Step 1 → Step 2 : choisir un service ──────────────────────────
+  const handleSelectService = (svc: ServiceOption) => {
+    setSelectedService(svc)
+    setParcours(null)
+    setSelectedMedecin(null)
+    setMedecinSlots([])
+    setSelectedSlot(null)
+    setSelectedQuickSlot(null)
+    setQuickSlots([])
+    setSuccessMessage("")
+    setErrorMessage("")
+    setStep(2)
+  }
+
+  // ── Parcours A : charger les médecins du service ───────────────────
+  const handleChooseParcoursMedecin = useCallback(async () => {
+    if (!selectedService) return
+    setParcours("medecin")
+    setLoadingMedecins(true)
+    try {
+      const data = await fetchMedecinsByService(selectedService.id)
+      setMedecins(data)
+    } catch {
+      setErrorMessage("Impossible de charger les médecins.")
+    } finally {
+      setLoadingMedecins(false)
+    }
+  }, [selectedService])
+
+  // ── Parcours A : charger les dispos d'un médecin ───────────────────
+  const handleSelectMedecin = useCallback(async (med: MedecinOption) => {
+    setSelectedMedecin(med)
+    setSelectedSlot(null)
+    setLoadingSlots(true)
+    try {
+      const data = await fetchMedecinDisponibilites(med.id)
+      setMedecinSlots(data)
+    } catch {
+      setErrorMessage("Impossible de charger les disponibilités.")
+    } finally {
+      setLoadingSlots(false)
+    }
+  }, [])
+
+  // ── Parcours B : charger les créneaux rapides ──────────────────────
+  const handleChooseParcoursRapide = () => {
+    setParcours("creneau")
+    setSelectedQuickSlot(null)
+    setQuickSlots([])
+  }
+
+  const handleSearchQuickSlots = useCallback(async () => {
+    if (!selectedService) return
+    setLoadingQuickSlots(true)
+    setSelectedQuickSlot(null)
+    try {
+      const data = await fetchServiceDisponibilites(selectedService.id, quickDate)
+      setQuickSlots(data)
+    } catch {
+      setErrorMessage("Impossible de charger les créneaux.")
+    } finally {
+      setLoadingQuickSlots(false)
+    }
+  }, [selectedService, quickDate])
+
+  // ── Step 3 : confirmer le RDV ──────────────────────────────────────
+  const handleConfirm = async () => {
+    if (!selectedService) return
+    setSubmitting(true)
+    setErrorMessage("")
+
+    let dateHeure: string
+    let medecinId: number
+
+    if (parcours === "medecin" && selectedMedecin && selectedSlot) {
+      dateHeure = `${selectedSlot.date}T${selectedSlot.heure}:00`
+      medecinId = selectedMedecin.id
+    } else if (parcours === "creneau" && selectedQuickSlot) {
+      dateHeure = `${quickDate}T${selectedQuickSlot.heure}:00`
+      medecinId = selectedQuickSlot.medecinId
+    } else {
+      setSubmitting(false)
+      return
+    }
+
+    try {
+      await createRendezVous({
+        dateHeure,
+        serviceId: selectedService.id,
+        medecinId,
+      })
+      setSuccessMessage("Votre demande de rendez-vous a bien été envoyée !")
+      setStep(1)
+      setParcours(null)
+      setSelectedService(null)
+      setSelectedMedecin(null)
+      setSelectedSlot(null)
+      setSelectedQuickSlot(null)
+    } catch {
+      setErrorMessage("Erreur lors de la création du rendez-vous.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────
+  const resetWizard = () => {
+    setStep(1)
+    setParcours(null)
+    setSelectedService(null)
+    setSelectedMedecin(null)
+    setMedecinSlots([])
+    setSelectedSlot(null)
+    setSelectedQuickSlot(null)
+    setQuickSlots([])
+    setErrorMessage("")
+    setSuccessMessage("")
+  }
 
   const submitAi = () => {
     if (!symptoms.trim()) return
     setAiAnswer(
       "Recommandation IA: une consultation de Médecine générale est conseillée. Vous pouvez prendre rendez-vous ci-dessous."
     )
-  }
-
-  const createAppointment = () => {
-    const chosenDoctor = doctor || availableDoctors[0]
-    if (!chosenDoctor) return
-    setAppointments((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        date,
-        heure: quickSlot,
-        service,
-        medecin: chosenDoctor,
-        statut: "confirmé",
-      },
-    ])
-    setStep(1)
-    setDoctor("")
   }
 
   const handleLogout = async () => {
@@ -116,6 +241,19 @@ export default function PatientDashboard() {
       setIsLoggingOut(false)
     }
   }
+
+  // Résumé pour l'étape 3
+  const summaryServiceNom = selectedService?.nom ?? ""
+  const summaryMedecinNom =
+    parcours === "medecin"
+      ? selectedMedecin?.nom ?? ""
+      : selectedQuickSlot?.medecinNom ?? ""
+  const summaryDate =
+    parcours === "medecin" ? selectedSlot?.date ?? "" : quickDate
+  const summaryHeure =
+    parcours === "medecin"
+      ? selectedSlot?.heure ?? ""
+      : selectedQuickSlot?.heure ?? ""
 
   return (
     <div className="min-h-screen bg-muted/20 p-4 md:p-8">
@@ -159,66 +297,275 @@ export default function PatientDashboard() {
         {activeTab === "rdv" && (
           <Card>
             <CardHeader>
-              <CardTitle>Prise de rendez-vous (3 étapes)</CardTitle>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Prise de rendez-vous</CardTitle>
+                  <CardDescription>Étape {step} sur 3</CardDescription>
+                </div>
+                {step > 1 && (
+                  <Button variant="ghost" size="sm" onClick={resetWizard}>
+                    Recommencer
+                  </Button>
+                )}
+              </div>
+              {/* Barre de progression */}
+              <div className="flex gap-1 pt-2">
+                {[1, 2, 3].map((s) => (
+                  <div
+                    key={s}
+                    className={`h-1.5 flex-1 rounded-full transition-colors ${
+                      s <= step ? "bg-primary" : "bg-muted"
+                    }`}
+                  />
+                ))}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Messages */}
+              {successMessage && (
+                <div className="rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+                  {successMessage}
+                </div>
+              )}
+              {errorMessage && (
+                <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                  {errorMessage}
+                  <Button variant="ghost" size="sm" className="ml-2" onClick={() => setErrorMessage("")}>
+                    Fermer
+                  </Button>
+                </div>
+              )}
+
+              {/* ── ÉTAPE 1 : Choisir un service ──────────────────────── */}
               {step === 1 && (
                 <div className="space-y-3">
-                  <Label>Étape 1 - Choisir un service</Label>
-                  <select
-                    className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    value={service}
-                    onChange={(e) => setService(e.target.value as Service)}
-                  >
-                    {Object.keys(doctorsByService).map((svc) => (
-                      <option key={svc} value={svc}>
-                        {svc}
-                      </option>
-                    ))}
-                  </select>
-                  <Button onClick={() => setStep(2)}>Continuer</Button>
+                  <Label className="text-base font-semibold">Choisissez un service</Label>
+                  {loadingServices ? (
+                    <p className="text-sm text-muted-foreground">Chargement des services...</p>
+                  ) : services.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Aucun service disponible.</p>
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {services.map((svc) => (
+                        <button
+                          key={svc.id}
+                          onClick={() => handleSelectService(svc)}
+                          className={`rounded-xl border p-4 text-left transition-all hover:border-primary hover:shadow-md ${
+                            selectedService?.id === svc.id
+                              ? "border-primary bg-primary/5 shadow-md"
+                              : "bg-background"
+                          }`}
+                        >
+                          <span className="font-medium">{svc.nom}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {step === 2 && (
-                <div className="space-y-3">
-                  <Label>Étape 2 - Choisir médecin et créneau</Label>
-                  <select
-                    className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    value={doctor}
-                    onChange={(e) => setDoctor(e.target.value)}
-                  >
-                    <option value="">Premier médecin disponible</option>
-                    {availableDoctors.map((doc) => (
-                      <option key={doc} value={doc}>
-                        {doc}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                    <Input type="time" value={quickSlot} onChange={(e) => setQuickSlot(e.target.value)} />
+              {/* ── ÉTAPE 2 : Choix du parcours ───────────────────────── */}
+              {step === 2 && selectedService && (
+                <div className="space-y-4">
+                  <div className="rounded-md bg-muted/30 px-3 py-2 text-sm">
+                    Service sélectionné : <span className="font-semibold">{selectedService.nom}</span>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setStep(1)}>
-                      Retour
-                    </Button>
-                    <Button onClick={() => setStep(3)}>Continuer</Button>
-                  </div>
+
+                  {/* Choix du parcours */}
+                  {!parcours && (
+                    <div className="space-y-3">
+                      <Label className="text-base font-semibold">Comment souhaitez-vous choisir ?</Label>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <button
+                          onClick={handleChooseParcoursMedecin}
+                          className="rounded-xl border bg-background p-5 text-left transition-all hover:border-primary hover:shadow-md"
+                        >
+                          <p className="font-medium">Par médecin</p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            Choisir un médecin puis voir ses disponibilités
+                          </p>
+                        </button>
+                        <button
+                          onClick={handleChooseParcoursRapide}
+                          className="rounded-xl border bg-background p-5 text-left transition-all hover:border-primary hover:shadow-md"
+                        >
+                          <p className="font-medium">Par créneau rapide</p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            Choisir une date et voir les médecins disponibles
+                          </p>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Parcours A : par médecin ─────────────────────── */}
+                  {parcours === "medecin" && (
+                    <div className="space-y-4">
+                      {loadingMedecins ? (
+                        <p className="text-sm text-muted-foreground">Chargement des médecins...</p>
+                      ) : (
+                        <>
+                          {/* Liste des médecins */}
+                          {!selectedMedecin && (
+                            <div className="space-y-3">
+                              <Label className="text-base font-semibold">Choisissez un médecin</Label>
+                              {medecins.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">Aucun médecin disponible pour ce service.</p>
+                              ) : (
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  {medecins.map((med) => (
+                                    <button
+                                      key={med.id}
+                                      onClick={() => handleSelectMedecin(med)}
+                                      className="rounded-xl border bg-background p-4 text-left transition-all hover:border-primary hover:shadow-md"
+                                    >
+                                      <p className="font-medium">{med.nom}</p>
+                                      <p className="text-sm text-muted-foreground">{med.specialite}</p>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Créneaux du médecin sélectionné */}
+                          {selectedMedecin && (
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-2">
+                                <Label className="text-base font-semibold">
+                                  Disponibilités de {selectedMedecin.nom}
+                                </Label>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedMedecin(null)
+                                    setMedecinSlots([])
+                                    setSelectedSlot(null)
+                                  }}
+                                >
+                                  Changer
+                                </Button>
+                              </div>
+                              {loadingSlots ? (
+                                <p className="text-sm text-muted-foreground">Chargement des créneaux...</p>
+                              ) : medecinSlots.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">Aucun créneau disponible.</p>
+                              ) : (
+                                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                  {medecinSlots.map((slot, i) => (
+                                    <button
+                                      key={`${slot.date}-${slot.heure}-${i}`}
+                                      onClick={() => {
+                                        setSelectedSlot(slot)
+                                        setStep(3)
+                                      }}
+                                      className={`rounded-lg border px-4 py-3 text-left text-sm transition-all hover:border-primary ${
+                                        selectedSlot === slot ? "border-primary bg-primary/5" : "bg-background"
+                                      }`}
+                                    >
+                                      <p className="font-medium">{slot.date}</p>
+                                      <p className="text-muted-foreground">{slot.heure}</p>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── Parcours B : créneau rapide ──────────────────── */}
+                  {parcours === "creneau" && (
+                    <div className="space-y-4">
+                      <Label className="text-base font-semibold">Choisissez une date</Label>
+                      <div className="flex items-end gap-3">
+                        <div className="flex-1">
+                          <Input
+                            type="date"
+                            value={quickDate}
+                            min={today}
+                            onChange={(e) => setQuickDate(e.target.value)}
+                          />
+                        </div>
+                        <Button onClick={handleSearchQuickSlots} disabled={loadingQuickSlots}>
+                          {loadingQuickSlots ? "Recherche..." : "Rechercher"}
+                        </Button>
+                      </div>
+
+                      {quickSlots.length > 0 && (
+                        <div className="space-y-3">
+                          <Label className="text-sm font-medium">
+                            {quickSlots.length} créneau{quickSlots.length > 1 ? "x" : ""} disponible{quickSlots.length > 1 ? "s" : ""} le {quickDate}
+                          </Label>
+                          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                            {quickSlots.map((slot, i) => (
+                              <button
+                                key={`${slot.medecinId}-${slot.heure}-${i}`}
+                                onClick={() => {
+                                  setSelectedQuickSlot(slot)
+                                  setStep(3)
+                                }}
+                                className={`rounded-lg border px-4 py-3 text-left text-sm transition-all hover:border-primary ${
+                                  selectedQuickSlot === slot ? "border-primary bg-primary/5" : "bg-background"
+                                }`}
+                              >
+                                <p className="font-medium">{slot.heure}</p>
+                                <p className="text-muted-foreground">{slot.medecinNom}</p>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {!loadingQuickSlots && quickSlots.length === 0 && quickDate && parcours === "creneau" && (
+                        <p className="text-sm text-muted-foreground">
+                          Cliquez sur "Rechercher" pour voir les créneaux disponibles.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Bouton retour */}
+                  <Button variant="outline" onClick={() => { setStep(1); setParcours(null) }}>
+                    Retour
+                  </Button>
                 </div>
               )}
 
+              {/* ── ÉTAPE 3 : Confirmation ────────────────────────────── */}
               {step === 3 && (
-                <div className="space-y-3">
-                  <Label>Étape 3 - Confirmer la demande</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Service: {service} | Médecin: {doctor || "Premier disponible"} | {date} à {quickSlot}
-                  </p>
+                <div className="space-y-4">
+                  <Label className="text-base font-semibold">Récapitulatif de votre rendez-vous</Label>
+                  <div className="rounded-xl border bg-muted/20 p-5 space-y-2">
+                    <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Service :</span>{" "}
+                        <span className="font-medium">{summaryServiceNom}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Médecin :</span>{" "}
+                        <span className="font-medium">{summaryMedecinNom}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Date :</span>{" "}
+                        <span className="font-medium">{summaryDate}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Heure :</span>{" "}
+                        <span className="font-medium">{summaryHeure}</span>
+                      </div>
+                    </div>
+                  </div>
                   <div className="flex gap-2">
                     <Button variant="outline" onClick={() => setStep(2)}>
                       Retour
                     </Button>
-                    <Button onClick={createAppointment}>Confirmer</Button>
+                    <Button onClick={handleConfirm} disabled={submitting}>
+                      {submitting ? "Envoi en cours..." : "Confirmer la demande"}
+                    </Button>
                   </div>
                 </div>
               )}
@@ -257,54 +604,15 @@ export default function PatientDashboard() {
         )}
 
         {activeTab === "planning" && (
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2">
-              <CalendarView
-                events={appointments.map(rdv => ({
-                  id: rdv.id,
-                  date: rdv.date,
-                  time: rdv.heure,
-                  title: `${rdv.service} - ${rdv.medecin}`,
-                  colorClass: "bg-primary text-primary-foreground border border-primary/20",
-                }))}
-                onDateClick={(d) => setDate(d)}
-                selectedDate={date}
-              />
-            </div>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>Détails du {date}</CardTitle>
-                <CardDescription>Vos rendez-vous pour cette date</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {appointments
-                  .filter((rdv) => rdv.date === date)
-                  .map((rdv) => (
-                    <div key={rdv.id} className="rounded-md border p-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-lg">{rdv.heure}</span>
-                        <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-                          {rdv.statut}
-                        </span>
-                      </div>
-                      <div className="space-y-1 text-sm text-muted-foreground">
-                        <p className="font-medium text-foreground">{rdv.service}</p>
-                        <p>{rdv.medecin}</p>
-                      </div>
-                    </div>
-                  ))}
-                {appointments.filter((rdv) => rdv.date === date).length === 0 && (
-                  <div className="flex flex-col items-center justify-center space-y-3 rounded-lg border border-dashed p-8 text-center">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
-                    </div>
-                    <p className="text-sm text-muted-foreground">Aucun rendez-vous planifié à cette date.</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Planning</CardTitle>
+              <CardDescription>Vos rendez-vous à venir</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">À implémenter — liste des rendez-vous via l'API.</p>
+            </CardContent>
+          </Card>
         )}
 
         {activeTab === "ordonnances" && (
