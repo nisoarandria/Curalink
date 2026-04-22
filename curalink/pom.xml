@@ -111,6 +111,17 @@
 				<configuration>
 					<mainClass>com.curalink.cli.EnsureAdminCli</mainClass>
 				</configuration>
+				<executions>
+					<execution>
+						<id>reset-database</id>
+						<goals>
+							<goal>java</goal>
+						</goals>
+						<configuration>
+							<mainClass>com.curalink.cli.ResetDatabaseCli</mainClass>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>

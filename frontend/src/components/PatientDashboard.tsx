@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -6,6 +7,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import CalendarView from "./CalendarView"
 import { PatientRecordView } from "./PatientMedicalRecord"
 import type { PatientRecord } from "./PatientMedicalRecord"
+import { useAuth } from "@/hooks/useAuth"
+import { logoutRequest } from "@/services/axiosInstance"
 
 type Service = "Médecine générale" | "Dermatologie" | "Cardiologie" | "Nutrition"
 type Step = 1 | 2 | 3
@@ -61,7 +64,10 @@ const mockPatient: PatientRecord = {
 }
 
 export default function PatientDashboard() {
+  const navigate = useNavigate()
+  const { logout } = useAuth()
   const [activeTab, setActiveTab] = useState<"rdv" | "chatbot" | "dossier" | "planning" | "ordonnances">("rdv")
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [step, setStep] = useState<Step>(1)
   const [service, setService] = useState<Service>("Médecine générale")
   const [date, setDate] = useState(today)
@@ -98,6 +104,19 @@ export default function PatientDashboard() {
     setDoctor("")
   }
 
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+    try {
+      await logoutRequest()
+    } catch {
+      // Même en cas d'erreur réseau/API, on nettoie la session côté client.
+    } finally {
+      logout()
+      navigate("/login", { replace: true })
+      setIsLoggingOut(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-muted/20 p-4 md:p-8">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -130,6 +149,9 @@ export default function PatientDashboard() {
               onClick={() => setActiveTab("ordonnances")}
             >
               Ordonnances
+            </Button>
+            <Button variant="destructive" className="ml-auto" onClick={handleLogout} disabled={isLoggingOut}>
+              {isLoggingOut ? "Déconnexion..." : "Se déconnecter"}
             </Button>
           </CardContent>
         </Card>

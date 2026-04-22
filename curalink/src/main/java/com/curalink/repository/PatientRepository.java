@@ -51,4 +51,45 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
 					""",
 			nativeQuery = true)
 	Page<Patient> searchPatients(@Param("q") String q, Pageable pageable);
+
+	/**
+	 * Patients liés au médecin (au moins un rendez-vous), avec recherche libre.
+	 */
+	@Query(
+			value = """
+					SELECT DISTINCT u.*
+					FROM users u
+					JOIN rendez_vous rv ON rv.patient_id = u.id
+					WHERE u.user_type = 'PATIENT'
+					  AND rv.medecin_id = :medecinId
+					  AND (
+						:q IS NULL
+						OR LOWER(COALESCE(u.nom, '')) LIKE LOWER(CONCAT('%', CAST(:q AS text), '%'))
+						OR LOWER(COALESCE(u.prenom, '')) LIKE LOWER(CONCAT('%', CAST(:q AS text), '%'))
+						OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', CAST(:q AS text), '%'))
+						OR LOWER(COALESCE(u.telephone, '')) LIKE LOWER(CONCAT('%', CAST(:q AS text), '%'))
+						OR LOWER(COALESCE(u.adresse, '')) LIKE LOWER(CONCAT('%', CAST(:q AS text), '%'))
+						OR CAST(u.date_naissance AS text) LIKE CONCAT('%', CAST(:q AS text), '%')
+						OR LOWER(COALESCE(CAST(u.sexe AS text), '')) LIKE LOWER(CONCAT('%', CAST(:q AS text), '%'))
+					  )
+					""",
+			countQuery = """
+					SELECT COUNT(DISTINCT u.id)
+					FROM users u
+					JOIN rendez_vous rv ON rv.patient_id = u.id
+					WHERE u.user_type = 'PATIENT'
+					  AND rv.medecin_id = :medecinId
+					  AND (
+						:q IS NULL
+						OR LOWER(COALESCE(u.nom, '')) LIKE LOWER(CONCAT('%', CAST(:q AS text), '%'))
+						OR LOWER(COALESCE(u.prenom, '')) LIKE LOWER(CONCAT('%', CAST(:q AS text), '%'))
+						OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', CAST(:q AS text), '%'))
+						OR LOWER(COALESCE(u.telephone, '')) LIKE LOWER(CONCAT('%', CAST(:q AS text), '%'))
+						OR LOWER(COALESCE(u.adresse, '')) LIKE LOWER(CONCAT('%', CAST(:q AS text), '%'))
+						OR CAST(u.date_naissance AS text) LIKE CONCAT('%', CAST(:q AS text), '%')
+						OR LOWER(COALESCE(CAST(u.sexe AS text), '')) LIKE LOWER(CONCAT('%', CAST(:q AS text), '%'))
+					  )
+					""",
+			nativeQuery = true)
+	Page<Patient> searchPatientsForMedecin(@Param("medecinId") Long medecinId, @Param("q") String q, Pageable pageable);
 }

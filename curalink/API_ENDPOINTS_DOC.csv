@@ -57,3 +57,4 @@ ADMIN;Utilisateurs;Créer compte staff;POST;http://localhost:8080/api/admin/staf
 ADMIN;Utilisateurs;Lister patients;GET;http://localhost:8080/api/admin/patients;Oui (Bearer ADMIN);page,size,q(optional);-;-;200 JSON PageResponse<PatientSummary>;Affiche la liste paginée des patients.
 ADMIN;Utilisateurs;Lister staff médical;GET;http://localhost:8080/api/admin/staff;Oui (Bearer ADMIN);page,size,q,type(optional);-;-;200 JSON PageResponse<StaffSummary>;Affiche la liste paginée des médecins/nutritionnistes.
 ADMIN;Utilisateurs;Supprimer utilisateur staff;DELETE;http://localhost:8080/api/admin/users/{id};Oui (Bearer ADMIN);-;id;-;204 No Content;Supprime un compte médecin/nutritionniste.
+TOUS_AUTHENTIFIES;Authentification;Se déconnecter;POST;http://localhost:8080/api/auth/logout;Oui (Bearer);-;-;-;200 JSON LogoutResponse;Déconnexion logique côté API (JWT stateless). Le client doit supprimer le token localement après succès.

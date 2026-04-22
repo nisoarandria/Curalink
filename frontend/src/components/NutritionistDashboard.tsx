@@ -1,8 +1,11 @@
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { useAuth } from "@/hooks/useAuth"
+import { logoutRequest } from "@/services/axiosInstance"
 
 type Rubrique =
   | "Diabète"
@@ -24,6 +27,9 @@ type Article = {
 const today = new Date().toISOString().slice(0, 10)
 
 export default function NutritionistDashboard() {
+  const navigate = useNavigate()
+  const { logout } = useAuth()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [articles, setArticles] = useState<Article[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<Omit<Article, "id">>({
@@ -62,6 +68,19 @@ export default function NutritionistDashboard() {
     }
   }
 
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+    try {
+      await logoutRequest()
+    } catch {
+      // Même en cas d'erreur réseau/API, on nettoie la session côté client.
+    } finally {
+      logout()
+      navigate("/login", { replace: true })
+      setIsLoggingOut(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-muted/20 p-4 md:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
@@ -70,6 +89,11 @@ export default function NutritionistDashboard() {
             <CardTitle>Espace nutritionniste</CardTitle>
             <CardDescription>Gestion CRUD des articles nutritionnels par pathologie.</CardDescription>
           </CardHeader>
+          <CardContent className="pt-0">
+            <Button variant="destructive" onClick={handleLogout} disabled={isLoggingOut}>
+              {isLoggingOut ? "Déconnexion..." : "Se déconnecter"}
+            </Button>
+          </CardContent>
         </Card>
 
         <div className="grid gap-6 lg:grid-cols-2">

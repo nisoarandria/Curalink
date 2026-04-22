@@ -3,6 +3,7 @@ package com.curalink.api.auth;
 import com.curalink.api.auth.dto.ChangePasswordRequest;
 import com.curalink.api.auth.dto.LoginRequest;
 import com.curalink.api.auth.dto.LoginResponse;
+import com.curalink.api.auth.dto.LogoutResponse;
 import com.curalink.api.auth.dto.PasswordChangeSuccessResponse;
 import com.curalink.api.auth.dto.PasswordResetAckResponse;
 import com.curalink.api.auth.dto.PasswordResetConfirmDto;
@@ -21,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
+
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -36,6 +39,15 @@ public class AuthController {
 	@PostMapping("/login")
 	public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
 		return ResponseEntity.ok(authService.login(request));
+	}
+
+	/**
+	 * Déconnexion logique pour JWT stateless : le front doit supprimer le token localement.
+	 */
+	@PostMapping("/logout")
+	@RequireUserTypes
+	public ResponseEntity<LogoutResponse> logout(@AuthenticationPrincipal AuthenticatedUser currentUser) {
+		return ResponseEntity.ok(new LogoutResponse("Déconnexion effectuée", Instant.now()));
 	}
 
 	/**
