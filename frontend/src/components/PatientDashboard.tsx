@@ -15,10 +15,16 @@ import {
   fetchMedecinDisponibilites,
   fetchServiceDisponibilites,
   createRendezVous,
+  fetchMyRendezVous,
+  annulerRendezVous,
+  confirmerRendezVous,
+  refuserRendezVous,
   type ServiceOption,
   type MedecinOption,
   type MedecinDisponibilite,
   type ServiceDisponibilite,
+  type RendezVousResponse,
+  type RendezVousStatus,
 } from "@/services/appointmentApi"
 
 type Step = 1 | 2 | 3
@@ -58,6 +64,25 @@ const mockPatient: PatientRecord = {
   ],
 }
 
+const STATUS_CONFIG: Record<RendezVousStatus, { label: string; className: string }> = {
+  EN_ATTENTE: { label: "En attente", className: "bg-yellow-100 text-yellow-800" },
+  PROPOSE: { label: "Proposé", className: "bg-blue-100 text-blue-800" },
+  CONFIRME: { label: "Confirmé", className: "bg-green-100 text-green-800" },
+  REFUSE: { label: "Refusé", className: "bg-red-100 text-red-800" },
+  ANNULE: { label: "Annulé", className: "bg-gray-100 text-gray-800" },
+  TERMINE: { label: "Terminé", className: "bg-purple-100 text-purple-800" },
+  ABSENT: { label: "Absent", className: "bg-orange-100 text-orange-800" },
+}
+
+function RdvStatusBadge({ status }: { status: RendezVousStatus }) {
+  const cfg = STATUS_CONFIG[status]
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${cfg.className}`}>
+      {cfg.label}
+    </span>
+  )
+}
+
 export default function PatientDashboard() {
   const navigate = useNavigate()
   const { logout } = useAuth()
@@ -94,6 +119,12 @@ export default function PatientDashboard() {
   const [successMessage, setSuccessMessage] = useState("")
   const [errorMessage, setErrorMessage] = useState("")
 
+  // ── Mes RDV state ──────────────────────────────────────────────────
+  const [mesRdv, setMesRdv] = useState<RendezVousResponse[]>([])
+  const [loadingRdv, setLoadingRdv] = useState(false)
+  const [rdvActionLoading, setRdvActionLoading] = useState<number | null>(null)
+  const [planningSelectedDate, setPlanningSelectedDate] = useState(today)
+
   // ── Charger les services au montage ────────────────────────────────
   useEffect(() => {
     setLoadingServices(true)
@@ -102,6 +133,40 @@ export default function PatientDashboard() {
       .catch(() => setErrorMessage("Impossible de charger les services."))
       .finally(() => setLoadingServices(false))
   }, [])
+
+  // ── Charger mes RDV quand on affiche l'onglet planning ─────────────
+  const loadMesRdv = useCallback(async () => {
+    setLoadingRdv(true)
+    try {
+      const res = await fetchMyRendezVous({ page: 0, size: 100 })
+      setMesRdv(res.content)
+    } catch {
+      setErrorMessage("Impossible de charger vos rendez-vous.")
+    } finally {
+      setLoadingRdv(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activeTab === "planning") {
+      loadMesRdv()
+    }
+  }, [activeTab, loadMesRdv])
+
+  // ── Actions sur les RDV ────────────────────────────────────────────
+  const handleRdvAction = async (id: number, action: "annuler" | "confirmer" | "refuser") => {
+    setRdvActionLoading(id)
+    try {
+      if (action === "annuler") await annulerRendezVous(id)
+      else if (action === "confirmer") await confirmerRendezVous(id)
+      else if (action === "refuser") await refuserRendezVous(id)
+      await loadMesRdv()
+    } catch {
+      setErrorMessage("Erreur lors de l'action sur le rendez-vous.")
+    } finally {
+      setRdvActionLoading(null)
+    }
+  }
 
   // ── Step 1 → Step 2 : choisir un service ──────────────────────────
   const handleSelectService = (svc: ServiceOption) => {
@@ -606,17 +671,170 @@ export default function PatientDashboard() {
           <PatientRecordView patient={mockPatient} />
         )}
 
-        {activeTab === "planning" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Planning</CardTitle>
-              <CardDescription>Vos rendez-vous à venir</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">À implémenter — liste des rendez-vous via l'API.</p>
-            </CardContent>
-          </Card>
-        )}
+        {activeTab === "planning" && (() => {
+          const calendarEvents = mesRdv.map((rdv) => {
+            const dt = new Date(rdv.dateHeure)
+            const dateStr = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`
+            const heureStr = dt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+            const colorByStatus: Record<string, string> = {
+              EN_ATTENTE: "bg-yellow-100 text-yellow-800 border border-yellow-200",
+              PROPOSE: "bg-blue-100 text-blue-800 border border-blue-200",
+              CONFIRME: "bg-green-100 text-green-800 border border-green-200",
+              ANNULE: "bg-gray-100 text-gray-500 border border-gray-200",
+              REFUSE: "bg-red-100 text-red-800 border border-red-200",
+              TERMINE: "bg-purple-100 text-purple-800 border border-purple-200",
+              ABSENT: "bg-orange-100 text-orange-800 border border-orange-200",
+            }
+            return {
+              id: String(rdv.id),
+              date: dateStr,
+              time: heureStr,
+              title: `${rdv.serviceNom} - ${rdv.medecinNomComplet}`,
+              colorClass: colorByStatus[rdv.status] ?? "bg-primary/10 text-primary border border-primary/20",
+              onClick: () => setPlanningSelectedDate(dateStr),
+            }
+          })
+
+          const rdvsForDate = mesRdv.filter((rdv) => {
+            const dt = new Date(rdv.dateHeure)
+            const dateStr = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`
+            return dateStr === planningSelectedDate
+          })
+
+          const upcomingRdv = mesRdv
+            .filter((rdv) => {
+              const dt = new Date(rdv.dateHeure)
+              return dt >= new Date() && (rdv.status === "EN_ATTENTE" || rdv.status === "PROPOSE" || rdv.status === "CONFIRME")
+            })
+            .sort((a, b) => new Date(a.dateHeure).getTime() - new Date(b.dateHeure).getTime())
+
+          const selectedDateLabel = (() => {
+            const [y, m, d] = planningSelectedDate.split("-").map(Number)
+            return new Date(y, m - 1, d).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+          })()
+
+          return (
+            <div className="space-y-6">
+              {loadingRdv ? (
+                <p className="text-sm text-muted-foreground">Chargement...</p>
+              ) : (
+                <>
+                  {/* Calendrier + détails du jour */}
+                  <div className="grid gap-6 lg:grid-cols-3">
+                    <div className="lg:col-span-2">
+                      <CalendarView
+                        events={calendarEvents}
+                        onDateClick={(d) => setPlanningSelectedDate(d)}
+                        selectedDate={planningSelectedDate}
+                      />
+                    </div>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">{selectedDateLabel}</CardTitle>
+                        <CardDescription>
+                          {rdvsForDate.length} rendez-vous
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {rdvsForDate.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center space-y-3 rounded-lg border border-dashed p-6 text-center">
+                            <p className="text-sm text-muted-foreground">Aucun rendez-vous ce jour.</p>
+                          </div>
+                        ) : (
+                          rdvsForDate.map((rdv) => {
+                            const dt = new Date(rdv.dateHeure)
+                            const heureStr = dt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+                            return (
+                              <div key={rdv.id} className="rounded-lg border p-3 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-semibold">{heureStr}</span>
+                                  <RdvStatusBadge status={rdv.status} />
+                                </div>
+                                <p className="text-sm font-medium">{rdv.serviceNom}</p>
+                                <p className="text-sm text-muted-foreground">{rdv.medecinNomComplet}</p>
+                                <div className="flex gap-2 pt-1">
+                                  {rdv.status === "PROPOSE" && (
+                                    <>
+                                      <Button size="sm" onClick={() => handleRdvAction(rdv.id, "confirmer")} disabled={rdvActionLoading === rdv.id}>
+                                        Confirmer
+                                      </Button>
+                                      <Button size="sm" variant="outline" onClick={() => handleRdvAction(rdv.id, "refuser")} disabled={rdvActionLoading === rdv.id}>
+                                        Refuser
+                                      </Button>
+                                    </>
+                                  )}
+                                  {(rdv.status === "EN_ATTENTE" || rdv.status === "CONFIRME") && (
+                                    <Button size="sm" variant="destructive" onClick={() => handleRdvAction(rdv.id, "annuler")} disabled={rdvActionLoading === rdv.id}>
+                                      Annuler
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Liste des RDV à venir */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Rendez-vous à venir</CardTitle>
+                      <CardDescription>{upcomingRdv.length} rendez-vous en attente ou confirmés</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {upcomingRdv.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Aucun rendez-vous à venir.</p>
+                      ) : (
+                        <div className="divide-y">
+                          {upcomingRdv.map((rdv) => {
+                            const dt = new Date(rdv.dateHeure)
+                            const dateStr = dt.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })
+                            const heureStr = dt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+                            return (
+                              <div key={rdv.id} className="flex items-center justify-between gap-4 py-3">
+                                <div className="flex items-center gap-4">
+                                  <div className="text-center min-w-[60px]">
+                                    <p className="text-sm font-semibold">{dateStr}</p>
+                                    <p className="text-xs text-muted-foreground">{heureStr}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-medium">{rdv.serviceNom}</p>
+                                    <p className="text-xs text-muted-foreground">{rdv.medecinNomComplet}</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <RdvStatusBadge status={rdv.status} />
+                                  {(rdv.status === "EN_ATTENTE" || rdv.status === "CONFIRME") && (
+                                    <Button size="sm" variant="destructive" onClick={() => handleRdvAction(rdv.id, "annuler")} disabled={rdvActionLoading === rdv.id}>
+                                      Annuler
+                                    </Button>
+                                  )}
+                                  {rdv.status === "PROPOSE" && (
+                                    <>
+                                      <Button size="sm" onClick={() => handleRdvAction(rdv.id, "confirmer")} disabled={rdvActionLoading === rdv.id}>
+                                        Confirmer
+                                      </Button>
+                                      <Button size="sm" variant="outline" onClick={() => handleRdvAction(rdv.id, "refuser")} disabled={rdvActionLoading === rdv.id}>
+                                        Refuser
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+            </div>
+          )
+        })()}
 
         {activeTab === "ordonnances" && (
           <Card>

@@ -45,6 +45,14 @@ export type RendezVousResponse = {
   medecinNomComplet: string;
 };
 
+export type PageResponse<T> = {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+};
+
 // ── Appels API ───────────────────────────────────────────────────────────
 
 /** Liste des services disponibles */
@@ -77,6 +85,44 @@ export async function fetchServiceDisponibilites(
   const { data } = await publicClient.get<ServiceDisponibilite[]>(
     `/services/${serviceId}/disponibilites`,
     { params: { date } }
+  );
+  return data;
+}
+
+/** Liste paginée des RDV du patient connecté */
+export async function fetchMyRendezVous(params?: {
+  page?: number;
+  size?: number;
+  q?: string;
+  date?: string;
+}) {
+  const { data } = await apiClient.get<PageResponse<RendezVousResponse>>(
+    "/patients/me/rendezvous",
+    { params }
+  );
+  return data;
+}
+
+/** Annuler un RDV (PATIENT) */
+export async function annulerRendezVous(id: number) {
+  const { data } = await apiClient.patch<RendezVousResponse>(
+    `/rendezvous/${id}/annuler`
+  );
+  return data;
+}
+
+/** Confirmer un RDV proposé (PATIENT) */
+export async function confirmerRendezVous(id: number) {
+  const { data } = await apiClient.patch<RendezVousResponse>(
+    `/rendezvous/${id}/confirmer`
+  );
+  return data;
+}
+
+/** Refuser un RDV proposé (PATIENT) */
+export async function refuserRendezVous(id: number) {
+  const { data } = await apiClient.patch<RendezVousResponse>(
+    `/rendezvous/${id}/refuser`
   );
   return data;
 }
