@@ -177,11 +177,14 @@ export default function PatientDashboard() {
     let dateHeure: string
     let medecinId: number
 
+    // heure peut être "08:00" ou "08:00:00" — on normalise en HH:mm:ss
+    const normalizeHeure = (h: string) => (h.split(":").length === 2 ? `${h}:00` : h)
+
     if (parcours === "medecin" && selectedMedecin && selectedSlot) {
-      dateHeure = `${selectedSlot.date}T${selectedSlot.heure}:00`
+      dateHeure = `${selectedSlot.date}T${normalizeHeure(selectedSlot.heure)}`
       medecinId = selectedMedecin.id
     } else if (parcours === "creneau" && selectedQuickSlot) {
-      dateHeure = `${quickDate}T${selectedQuickSlot.heure}:00`
+      dateHeure = `${quickDate}T${normalizeHeure(selectedQuickSlot.heure)}`
       medecinId = selectedQuickSlot.medecinId
     } else {
       setSubmitting(false)
