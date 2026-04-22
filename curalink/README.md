@@ -56,3 +56,8 @@ Apres le build :
 cd curalink
 java -jar target/curalink-0.0.1-SNAPSHOT.jar
 ```
+
+## Commande pour reset database
+```bash
+RESET_DB_CONFIRM=YES mvn exec:java@reset-database
+```
