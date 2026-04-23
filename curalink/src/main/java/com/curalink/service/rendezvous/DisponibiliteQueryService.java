@@ -52,7 +52,8 @@ public class DisponibiliteQueryService {
 				.map(m -> new MedecinOptionResponse(
 						m.getId(),
 						formatMedecinName(m),
-						service.getNom()))
+						service.getNom(),
+						m.getAdresse()))
 				.toList();
 	}
 

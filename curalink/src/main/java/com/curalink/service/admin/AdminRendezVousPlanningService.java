@@ -53,7 +53,9 @@ public class AdminRendezVousPlanningService {
 				rdv.getPatient().getId(),
 				rdv.getPatient().getPrenom() + " " + rdv.getPatient().getNom(),
 				rdv.getMedecin().getId(),
-				rdv.getMedecin().getPrenom() + " " + rdv.getMedecin().getNom());
+				rdv.getMedecin().getPrenom() + " " + rdv.getMedecin().getNom(),
+				rdv.getService().getNom(),
+				rdv.getMedecin().getAdresse());
 	}
 
 	private static int clampSize(int size) {

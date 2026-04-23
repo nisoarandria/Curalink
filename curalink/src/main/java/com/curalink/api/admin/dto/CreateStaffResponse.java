@@ -6,7 +6,7 @@ public record CreateStaffResponse(
 		String nom,
 		String prenom,
 		String telephone,
-		String adresse,
+		String adresseCabinet,
 		StaffRole role,
 		/** Renseigné pour un médecin ; {@code null} pour un nutritionniste. */
 		Long serviceId,

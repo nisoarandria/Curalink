@@ -30,6 +30,9 @@ public class Article {
 	@Column(name = "date_publication", nullable = false)
 	private LocalDateTime datePublication;
 
+	@Column(name = "couverture_file")
+	private String couvertureFile;
+
 	@ManyToOne(optional = false, fetch = FetchType.LAZY)
 	@JoinColumn(name = "rubrique_id", nullable = false)
 	private RubriqueNutritionnelle rubrique;
@@ -45,11 +48,13 @@ public class Article {
 			String titre,
 			String contenu,
 			LocalDateTime datePublication,
+			String couvertureFile,
 			RubriqueNutritionnelle rubrique,
 			Nutritionniste auteur) {
 		this.titre = titre;
 		this.contenu = contenu;
 		this.datePublication = datePublication;
+		this.couvertureFile = couvertureFile;
 		this.rubrique = rubrique;
 		this.auteur = auteur;
 	}
@@ -92,6 +97,14 @@ public class Article {
 
 	public void setRubrique(RubriqueNutritionnelle rubrique) {
 		this.rubrique = rubrique;
+	}
+
+	public String getCouvertureFile() {
+		return couvertureFile;
+	}
+
+	public void setCouvertureFile(String couvertureFile) {
+		this.couvertureFile = couvertureFile;
 	}
 
 	public Nutritionniste getAuteur() {

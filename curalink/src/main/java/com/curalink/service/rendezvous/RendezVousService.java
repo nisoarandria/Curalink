@@ -13,6 +13,7 @@ import com.curalink.repository.RendezVousRepository;
 import com.curalink.repository.ServiceItemRepository;
 import com.curalink.repository.UserRepository;
 import com.curalink.security.AuthenticatedUser;
+import com.curalink.service.mail.PasswordResetMailNotifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,14 +33,17 @@ public class RendezVousService {
 	private final RendezVousRepository rendezVousRepository;
 	private final UserRepository userRepository;
 	private final ServiceItemRepository serviceItemRepository;
+	private final PasswordResetMailNotifier mailNotifier;
 
 	public RendezVousService(
 			RendezVousRepository rendezVousRepository,
 			UserRepository userRepository,
-			ServiceItemRepository serviceItemRepository) {
+			ServiceItemRepository serviceItemRepository,
+			PasswordResetMailNotifier mailNotifier) {
 		this.rendezVousRepository = rendezVousRepository;
 		this.userRepository = userRepository;
 		this.serviceItemRepository = serviceItemRepository;
+		this.mailNotifier = mailNotifier;
 	}
 
 	@Transactional(readOnly = true)
@@ -125,6 +129,13 @@ public class RendezVousService {
 		RendezVous rdv = requireParticipant(currentUser, rendezVousId);
 		requireCurrentStatus(rdv, RendezVousStatus.PROPOSE);
 		rdv.setStatus(RendezVousStatus.CONFIRME);
+		mailNotifier.sendRendezVousConfirmationRecap(
+				rdv.getPatient().getEmail(),
+				rdv.getPatient().getPrenom(),
+				rdv.getMedecin().getPrenom() + " " + rdv.getMedecin().getNom(),
+				rdv.getService().getNom(),
+				rdv.getDateHeure(),
+				rdv.getMedecin().getAdresse());
 		return toResponse(rdv);
 	}
 
@@ -252,7 +263,9 @@ public class RendezVousService {
 				rdv.getPatient().getId(),
 				rdv.getPatient().getPrenom() + " " + rdv.getPatient().getNom(),
 				rdv.getMedecin().getId(),
-				rdv.getMedecin().getPrenom() + " " + rdv.getMedecin().getNom());
+				rdv.getMedecin().getPrenom() + " " + rdv.getMedecin().getNom(),
+				rdv.getService().getNom(),
+				rdv.getMedecin().getAdresse());
 	}
 
 	private static int clampSize(int size) {
