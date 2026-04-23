@@ -505,9 +505,9 @@ export default function NutritionistDashboard() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#F5F6FA] text-foreground font-sans">
+    <div className="flex h-screen overflow-hidden bg-[#F5F6FA] text-foreground font-sans">
       {/* Sidebar (desktop) */}
-      <aside className="hidden w-72 flex-col bg-white md:flex shrink-0 border-r border-border/40">
+      <aside className="hidden h-screen w-72 shrink-0 flex-col border-r border-border/40 bg-white md:sticky md:top-0 md:flex">
         {/* Logo */}
         <div className="flex h-20 items-center gap-2.5 px-6">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/20">
@@ -583,7 +583,7 @@ export default function NutritionistDashboard() {
           </Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4">
+        <div className="flex-1 px-4">
           <nav className="space-y-1">
             <p className="px-3 pb-2 pt-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
               Navigation
