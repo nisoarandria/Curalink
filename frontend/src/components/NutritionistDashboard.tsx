@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 import { apiClient, logoutRequest } from "@/services/axiosInstance";
@@ -278,6 +279,8 @@ export default function NutritionistDashboard() {
   const [listTotalElements, setListTotalElements] = useState(0);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [rubriques, setRubriques] = useState<RubriqueApiItem[]>([]);
   const [rubriqueCounts, setRubriqueCounts] = useState<RubriqueCountItem[]>([]);
   const [loadingRubriques, setLoadingRubriques] = useState(true);
@@ -317,8 +320,15 @@ export default function NutritionistDashboard() {
   }, [rubriqueCounts, listTotalElements]);
 
   useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedSearch(searchInput.trim());
+    }, 400);
+    return () => window.clearTimeout(handle);
+  }, [searchInput]);
+
+  useEffect(() => {
     setListPage(0);
-  }, [selectedRubrique]);
+  }, [selectedRubrique, debouncedSearch]);
 
   useEffect(() => {
     const nutritionnisteId = user?.id;
@@ -363,6 +373,7 @@ export default function NutritionistDashboard() {
             params: {
               page: listPage,
               size: LIST_PAGE_SIZE,
+              ...(debouncedSearch ? { q: debouncedSearch } : {}),
               ...(pathologieParam ? { pathologie: pathologieParam } : {}),
             },
           },
@@ -385,6 +396,7 @@ export default function NutritionistDashboard() {
     activeTab,
     user?.id,
     listPage,
+    debouncedSearch,
     selectedRubrique,
     rubriques,
   ]);
@@ -720,6 +732,29 @@ export default function NutritionistDashboard() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {activeTab === "articles" && (
+              <div className="relative hidden md:block">
+                <svg
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+                <Input
+                  placeholder="Rechercher des articles…"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="pl-10 w-[280px] h-11 bg-white border-0 shadow-sm rounded-full focus-visible:ring-2 focus-visible:ring-primary/20 text-sm font-medium"
+                />
+              </div>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -1148,6 +1183,12 @@ export default function NutritionistDashboard() {
                   </p>
                 </div>
                 <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-end md:w-auto">
+                  <Input
+                    placeholder="Filtrer par texte…"
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    className="h-10 w-full rounded-xl bg-muted/40 sm:w-[220px] md:hidden"
+                  />
                   <select
                     className="h-10 w-full rounded-xl border bg-background px-4 py-1 text-sm font-semibold text-foreground shadow-sm sm:w-auto"
                     value={selectedRubrique}
@@ -1250,9 +1291,10 @@ export default function NutritionistDashboard() {
                   </div>
                   <h3 className="mt-4 text-lg font-bold">Aucun article</h3>
                   <p className="mb-6 mt-2 text-sm font-medium text-muted-foreground">
-                    {selectedRubrique === "Toutes les catégories"
+                    {selectedRubrique === "Toutes les catégories" &&
+                    !debouncedSearch
                       ? "Vous n'avez pas encore publié d'articles."
-                      : `Aucun article ne correspond à la catégorie « ${selectedRubrique} ».`}
+                      : `Aucun article ne correspond à votre recherche ou à la catégorie « ${selectedRubrique} ».`}
                   </p>
                   <Button
                     onClick={() => navigate("/nutritionniste/articles/new")}
