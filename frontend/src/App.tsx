@@ -4,6 +4,7 @@ import DoctorDashboard from "./components/DoctorDashboard";
 import PublicHomePage from "./components/PublicHomePage";
 import PatientDashboard from "./components/PatientDashboard";
 import NutritionistDashboard from "./components/NutritionistDashboard";
+import ArticleEditorPage from "./pages/nutritionniste/ArticleEditorPage";
 import PathologyPage from "./components/PathologyPage.tsx";
 import ArticlePage from "./components/ArticlePage.tsx";
 import RegisterPatientPage from "./components/RegisterPatientPage.tsx";
@@ -24,6 +25,10 @@ export default function App() {
         </Route>
         <Route element={<ProtectedRoute allowedRoles={["NUTRITIONNISTE"]} />}>
           <Route path="/nutritionniste" element={<NutritionistDashboard />} />
+          <Route
+            path="/nutritionniste/articles/:id"
+            element={<ArticleEditorPage />}
+          />
         </Route>
         <Route path="/nutrition/:pathology" element={<PathologyPage />} />
         <Route path="/nutrition/article/:articleId" element={<ArticlePage />} />
