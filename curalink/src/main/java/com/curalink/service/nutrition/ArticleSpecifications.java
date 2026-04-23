@@ -22,9 +22,14 @@ public final class ArticleSpecifications {
 			String q,
 			String pathologie,
 			LocalDate dateDebut,
-			LocalDate dateFin) {
+			LocalDate dateFin,
+			Long auteurUserId) {
 		return (root, query, cb) -> {
 			List<Predicate> predicates = new ArrayList<>();
+
+			if (auteurUserId != null) {
+				predicates.add(cb.equal(root.join("auteur", JoinType.INNER).get("id"), auteurUserId));
+			}
 
 			if (StringUtils.hasText(q)) {
 				String pattern = "%" + q.trim().toLowerCase(Locale.ROOT) + "%";

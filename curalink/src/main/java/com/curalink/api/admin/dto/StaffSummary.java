@@ -8,7 +8,7 @@ public record StaffSummary(
 		String nom,
 		String prenom,
 		String telephone,
-		String adresse,
+		String adresseCabinet,
 		StaffRole role,
 		/** Renseigné pour les médecins ; {@code null} pour les nutritionnistes. */
 		ServiceSummary service,

@@ -11,6 +11,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 /**
  * Envoie les e-mails de mot de passe (réinitialisation, création staff). Corps en UTF-8, sans
@@ -24,6 +27,10 @@ public class PasswordResetMailNotifier {
 	private final ObjectProvider<JavaMailSender> mailSender;
 	private final String smtpHost;
 	private final String fromAddress;
+	private static final DateTimeFormatter RDV_DATE_FORMAT =
+			DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.FRANCE);
+	private static final DateTimeFormatter RDV_TIME_FORMAT =
+			DateTimeFormatter.ofPattern("HH:mm", Locale.FRANCE);
 
 	public PasswordResetMailNotifier(
 			ObjectProvider<JavaMailSender> mailSender,
@@ -75,6 +82,39 @@ public class PasswordResetMailNotifier {
 				.append("L’équipe Curalink\r\n")
 				.toString();
 		sendUtf8Text(toEmail, subject, body, plainPassword, "compte staff");
+	}
+
+	/**
+	 * Envoi d'un e-mail de confirmation du rendez-vous au patient avec le récapitulatif.
+	 */
+	public void sendRendezVousConfirmationRecap(
+			String toEmail,
+			String patientPrenom,
+			String medecinNomComplet,
+			String specialite,
+			LocalDateTime dateHeure,
+			String adresseCabinet) {
+		String subject = "Curalink — confirmation de votre rendez-vous";
+		String safePrenom = patientPrenom != null ? patientPrenom : "";
+		String safeMedecin = medecinNomComplet != null ? medecinNomComplet : "-";
+		String safeSpecialite = specialite != null ? specialite : "-";
+		String safeAdresse = adresseCabinet != null ? adresseCabinet : "-";
+		String dateLabel = dateHeure != null ? dateHeure.toLocalDate().format(RDV_DATE_FORMAT) : "-";
+		String heureLabel = dateHeure != null ? dateHeure.toLocalTime().format(RDV_TIME_FORMAT) : "-";
+		String body = new StringBuilder()
+				.append("Bonjour ").append(safePrenom).append(",\r\n\r\n")
+				.append("Votre rendez-vous a été confirmé.\r\n\r\n")
+				.append("Récapitulatif :\r\n")
+				.append("- Médecin : ").append(safeMedecin).append("\r\n")
+				.append("- Spécialité : ").append(safeSpecialite).append("\r\n")
+				.append("- Date : ").append(dateLabel).append("\r\n")
+				.append("- Heure : ").append(heureLabel).append("\r\n")
+				.append("- Adresse du cabinet : ").append(safeAdresse).append("\r\n\r\n")
+				.append("Merci de vous présenter quelques minutes avant l'heure prévue.\r\n\r\n")
+				.append("Cordialement,\r\n")
+				.append("L’équipe Curalink\r\n")
+				.toString();
+		sendUtf8Text(toEmail, subject, body, "RDV#" + dateLabel + " " + heureLabel, "confirmation rendez-vous");
 	}
 
 	private void sendUtf8Text(String toEmail, String subject, String body, String secretForLogs, String logLabel) {

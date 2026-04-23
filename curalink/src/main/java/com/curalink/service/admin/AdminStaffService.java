@@ -143,7 +143,7 @@ public class AdminStaffService {
 						request.prenom().trim(),
 						email,
 						request.telephone().trim(),
-						request.adresse().trim(),
+						request.adresseCabinet().trim(),
 						null,
 						service);
 				m.setPasswordHash(hash);
@@ -156,7 +156,7 @@ public class AdminStaffService {
 						request.prenom().trim(),
 						email,
 						request.telephone().trim(),
-						request.adresse().trim(),
+						request.adresseCabinet().trim(),
 						null);
 				n.setPasswordHash(hash);
 				n.setFirstConnexion(true);
