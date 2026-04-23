@@ -583,7 +583,7 @@ export default function NutritionistDashboard() {
           </Button>
         </div>
 
-        <div className="flex-1 px-4">
+        <div className="flex-1 overflow-y-auto px-4">
           <nav className="space-y-1">
             <p className="px-3 pb-2 pt-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
               Navigation
