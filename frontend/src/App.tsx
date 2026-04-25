@@ -9,6 +9,8 @@ import ArticlePage from "./components/ArticlePage.tsx";
 import RegisterPatientPage from "./components/RegisterPatientPage.tsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
+<Route path="/PublicHomePage" element={<PublicHomePage />} />
+
 export default function App() {
   return (
     <BrowserRouter>
