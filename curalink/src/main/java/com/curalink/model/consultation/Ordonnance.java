@@ -25,9 +25,6 @@ public class Ordonnance {
 	@JoinColumn(name = "consultation_id", nullable = false, unique = true)
 	private Consultation consultation;
 
-	@Column(nullable = false, columnDefinition = "text")
-	private String prescription;
-
 	@Lob
 	@Column(name = "pdf_content", nullable = false)
 	private byte[] pdfContent;
@@ -38,9 +35,8 @@ public class Ordonnance {
 	protected Ordonnance() {
 	}
 
-	public Ordonnance(Consultation consultation, String prescription, byte[] pdfContent, LocalDateTime createdAt) {
+	public Ordonnance(Consultation consultation, byte[] pdfContent, LocalDateTime createdAt) {
 		this.consultation = consultation;
-		this.prescription = prescription;
 		this.pdfContent = pdfContent;
 		this.createdAt = createdAt;
 	}
@@ -51,10 +47,6 @@ public class Ordonnance {
 
 	public Consultation getConsultation() {
 		return consultation;
-	}
-
-	public String getPrescription() {
-		return prescription;
 	}
 
 	public byte[] getPdfContent() {

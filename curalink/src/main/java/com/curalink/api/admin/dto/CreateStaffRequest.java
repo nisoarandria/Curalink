@@ -11,6 +11,7 @@ public record CreateStaffRequest(
 		@NotBlank String prenom,
 		@NotBlank String telephone,
 		@NotBlank @JsonAlias("adresse") String adresseCabinet,
+		String numeroInscription,
 		@NotNull StaffRole role,
 		/** Obligatoire si role = MEDECIN (id d’un service du catalogue). Ignoré pour un nutritionniste. */
 		Long serviceId

@@ -1,6 +1,7 @@
 package com.curalink.repository;
 
 import com.curalink.model.rendezvous.RendezVous;
+import com.curalink.model.rendezvous.RendezVousStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -8,6 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
 
 public interface RendezVousRepository extends JpaRepository<RendezVous, Long> {
 
@@ -170,4 +173,17 @@ public interface RendezVousRepository extends JpaRepository<RendezVous, Long> {
 			@Param("endDateTime") LocalDateTime endDateTime,
 			@Param("q") String q,
 			Pageable pageable);
+
+	List<RendezVous> findTop5ByMedecin_IdAndStatusAndDateHeureBetweenOrderByDateHeureDesc(
+			Long medecinId,
+			RendezVousStatus status,
+			LocalDateTime startDateTime,
+			LocalDateTime endDateTime);
+
+	List<RendezVous> findTop5ByMedecin_IdAndDateHeureGreaterThanEqualAndStatusNotInOrderByDateHeureAsc(
+			Long medecinId,
+			LocalDateTime dateHeure,
+			Collection<RendezVousStatus> excludedStatuses);
+
+	long countByStatus(RendezVousStatus status);
 }

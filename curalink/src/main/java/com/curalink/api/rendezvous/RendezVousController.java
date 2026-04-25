@@ -3,6 +3,8 @@ package com.curalink.api.rendezvous;
 import com.curalink.api.dto.PageResponse;
 import com.curalink.api.medecin.dto.UpdateRendezVousStatusRequest;
 import com.curalink.api.rendezvous.dto.CreateRendezVousRequest;
+import com.curalink.api.rendezvous.dto.MedecinRendezVousResumeResponse;
+import com.curalink.api.rendezvous.dto.ProposeNouveauCreneauRequest;
 import com.curalink.api.rendezvous.dto.RendezVousResponse;
 import com.curalink.security.AuthenticatedUser;
 import com.curalink.security.RequireUserTypes;
@@ -44,8 +46,9 @@ public class RendezVousController {
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "20") int size,
 			@RequestParam(required = false) String q,
-			@RequestParam(required = false) LocalDate date) {
-		return ResponseEntity.ok(rendezVousService.listForCurrentMedecin(currentUser, page, size, q, date));
+			@RequestParam(required = false) LocalDate date,
+			@RequestParam(required = false) Integer month) {
+		return ResponseEntity.ok(rendezVousService.listForCurrentMedecin(currentUser, page, size, q, date, month));
 	}
 
 	/**
@@ -60,8 +63,17 @@ public class RendezVousController {
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "20") int size,
 			@RequestParam(required = false) String q,
-			@RequestParam(required = false) LocalDate date) {
-		return ResponseEntity.ok(rendezVousService.listForMedecinId(currentUser, medecinId, page, size, q, date));
+			@RequestParam(required = false) LocalDate date,
+			@RequestParam(required = false) Integer month) {
+		return ResponseEntity.ok(rendezVousService.listForMedecinId(currentUser, medecinId, page, size, q, date, month));
+	}
+
+	@GetMapping("/medecins/{medecinId}/rendezvous/resume")
+	@RequireUserTypes(UserType.MEDECIN)
+	public ResponseEntity<MedecinRendezVousResumeResponse> getMedecinRendezVousResume(
+			@AuthenticationPrincipal AuthenticatedUser currentUser,
+			@PathVariable long medecinId) {
+		return ResponseEntity.ok(rendezVousService.getResumeForMedecin(currentUser, medecinId));
 	}
 
 	/** Création d'un rendez-vous par un patient (statut par défaut = EN_ATTENTE). */
@@ -81,6 +93,16 @@ public class RendezVousController {
 			@AuthenticationPrincipal AuthenticatedUser currentUser,
 			@PathVariable long id) {
 		return ResponseEntity.ok(rendezVousService.proposer(currentUser, id));
+	}
+
+	/** Le médecin propose une nouvelle date/heure (EN_ATTENTE|PROPOSE -> PROPOSE). */
+	@PatchMapping("/{id}/proposer-creneau")
+	@RequireUserTypes(UserType.MEDECIN)
+	public ResponseEntity<RendezVousResponse> proposerNouveauCreneau(
+			@AuthenticationPrincipal AuthenticatedUser currentUser,
+			@PathVariable long id,
+			@Valid @RequestBody ProposeNouveauCreneauRequest request) {
+		return ResponseEntity.ok(rendezVousService.proposerNouveauCreneau(currentUser, id, request.dateHeure()));
 	}
 
 	/** Confirmation du rendez-vous (PROPOSE -> CONFIRME) par patient ou médecin concerné. */

@@ -4,6 +4,7 @@ public record MedecinOptionResponse(
 		long id,
 		String nom,
 		String specialite,
-		String adresseCabinet
+		String adresseCabinet,
+		String numeroInscription
 ) {
 }
