@@ -2,77 +2,197 @@ import { Link } from "react-router-dom"
 
 export default function Footer() {
   return (
-    <footer id="apropos" className="border-t bg-card text-card-foreground">
-      <div className="mx-auto w-full max-w-7xl px-4 py-12 md:px-8 lg:py-16">
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
-          
+    <footer
+      id="apropos"
+      className="
+        relative overflow-hidden
+        border-t border-white/10
+        text-white
+
+        bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950
+      "
+    >
+
+      {/* 🌊 WAVE BACKGROUND ANIMATION (CSS ONLY) */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute w-[200%] h-[200%] opacity-20 animate-[wave_12s_linear_infinite] bg-gradient-to-r from-cyan-500/10 via-blue-500/10 to-indigo-500/10 blur-3xl" />
+        <div className="absolute w-[200%] h-[200%] opacity-10 animate-[wave_18s_linear_infinite_reverse] bg-gradient-to-r from-indigo-500/10 via-cyan-500/10 to-blue-500/10 blur-3xl" />
+      </div>
+
+      {/* GLASS LAYER */}
+      <div className="absolute inset-0 backdrop-blur-3xl bg-white/5" />
+
+      {/* GLOW ORBS */}
+      <div className="absolute inset-0">
+        <div className="absolute -top-24 left-1/4 h-[320px] w-[320px] bg-cyan-500/10 blur-3xl rounded-full" />
+        <div className="absolute bottom-0 right-1/4 h-[320px] w-[320px] bg-blue-500/10 blur-3xl rounded-full" />
+      </div>
+
+      {/* CONTENT */}
+      <div className="relative mx-auto w-full max-w-7xl px-4 py-14 md:px-8 lg:py-20">
+
+        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
+
+          {/* BRAND */}
           <div className="space-y-4">
-            <Link to="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
-              <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 2a2 2 0 0 0-2 2v5H4a2 2 0 0 0-2 2v2c0 1.1.9 2 2 2h5v5c0 1.1.9 2 2 2h2a2 2 0 0 0 2-2v-5h5a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2h-5V4a2 2 0 0 0-2-2h-2z"/></svg>
+            <Link to="/" className="flex items-center gap-3 group">
+              <div className="
+                h-9 w-9 flex items-center justify-center
+                rounded-xl
+                bg-gradient-to-r from-cyan-500 to-blue-600
+                shadow-lg shadow-cyan-500/20
+                group-hover:scale-110
+                transition
+              ">
+                +
               </div>
-              <span className="text-xl font-bold">Curalink</span>
+              <span className="text-xl font-bold group-hover:text-cyan-400 transition">
+                Curalink
+              </span>
             </Link>
-            <p className="text-sm text-muted-foreground">
-              La plateforme santé de référence pour une prise en charge rapide, fluide et pluridisciplinaire à Madagascar.
+
+            <p className="text-sm text-white/60 leading-relaxed">
+              Plateforme santé moderne pour une prise en charge rapide et intelligente.
             </p>
           </div>
 
+          {/* NAV */}
           <div className="space-y-4">
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-foreground">Navigation</h4>
-            <ul className="space-y-3 text-sm text-muted-foreground">
-              <li><Link to="/#services" className="hover:text-primary transition-colors">Services</Link></li>
-              <li><Link to="/#pourquoi-nous" className="hover:text-primary transition-colors">Pourquoi nous choisir</Link></li>
-              <li><Link to="/#nutrition" className="hover:text-primary transition-colors">Articles nutritionnels</Link></li>
-              <li><Link to="/patient" className="hover:text-primary transition-colors">Espace Patient</Link></li>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white/80">
+              Navigation
+            </h4>
+
+            <ul className="space-y-3 text-sm">
+              {[
+                ["Services", "/#services"],
+                ["Pourquoi nous", "/#pourquoi-nous"],
+                ["Nutrition", "/#nutrition"],
+                ["Patient", "/patient"]
+              ].map(([label, link]) => (
+                <li key={label}>
+                  <Link
+                    to={link}
+                    className="
+                      text-white/60
+                      hover:text-cyan-400
+                      transition
+                      hover:translate-x-1
+                      inline-block
+                    "
+                  >
+                    {label}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 
+          {/* PRO */}
           <div className="space-y-4">
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-foreground">Professionnels</h4>
-            <ul className="space-y-3 text-sm text-muted-foreground">
-              <li><Link to="/medecin" className="hover:text-primary transition-colors">Portail Médecin</Link></li>
-              <li><Link to="/nutritionniste" className="hover:text-primary transition-colors">Portail Nutritionniste</Link></li>
-              <li><Link to="/login" className="hover:text-primary transition-colors">Se connecter</Link></li>
-              <li><a href="#" className="hover:text-primary transition-colors">Nous rejoindre</a></li>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white/80">
+              Professionnels
+            </h4>
+
+            <ul className="space-y-3 text-sm">
+              {[
+                ["Médecin", "/medecin"],
+                ["Nutritionniste", "/nutritionniste"],
+                ["Connexion", "/login"]
+              ].map(([label, link]) => (
+                <li key={label}>
+                  <Link
+                    to={link}
+                    className="
+                      text-white/60
+                      hover:text-blue-400
+                      transition
+                      hover:translate-x-1
+                      inline-block
+                    "
+                  >
+                    {label}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 
+          {/* CONTACT + MAGNETIC ICONS */}
           <div className="space-y-4">
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-foreground">Contact</h4>
-            <ul className="space-y-3 text-sm text-muted-foreground">
-              <li className="flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                <span>+261 34 00 000 00</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
-                <span>contact@curalink.health</span>
-              </li>
-              <li className="flex items-center gap-3 pt-2">
-                <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white/80">
+              Contact
+            </h4>
+
+            <div className="text-sm text-white/60 space-y-2">
+              <p>📞 +261 34 00 000 00</p>
+              <p>✉️ contact@curalink.health</p>
+            </div>
+
+            {/* MAGNETIC ICONS (CSS ONLY) */}
+            <div className="flex gap-3 pt-2">
+
+              {["F", "L", "T"].map((icon, i) => (
+                <a
+                  key={i}
+                  href="#"
+                  className="
+                    relative
+                    h-10 w-10 flex items-center justify-center
+
+                    rounded-full
+
+                    bg-white/5
+                    border border-white/10
+
+                    text-white/70
+
+                    transition-all duration-300
+
+                    hover:scale-125
+                    hover:-translate-y-1
+                    hover:bg-gradient-to-r
+                    hover:from-cyan-500
+                    hover:to-blue-500
+                    hover:text-white
+
+                    hover:shadow-[0_0_20px_rgba(34,211,238,0.4)]
+                  "
+                >
+                  {icon}
                 </a>
-                <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></svg>
-                </a>
-                <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5 0.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/></svg>
-                </a>
-              </li>
-            </ul>
+              ))}
+
+            </div>
           </div>
 
         </div>
-        
-        <div className="mt-12 flex flex-col items-center justify-between border-t pt-8 text-sm text-muted-foreground sm:flex-row">
+
+        {/* BOTTOM */}
+        <div className="
+          mt-14 pt-6
+          border-t border-white/10
+          flex flex-col sm:flex-row justify-between
+          text-xs text-white/50
+        ">
           <p>© 2026 Curalink. Tous droits réservés.</p>
-          <div className="mt-4 flex gap-4 sm:mt-0">
-            <a href="#" className="hover:text-primary transition-colors">Mentions légales</a>
-            <a href="#" className="hover:text-primary transition-colors">Politique de confidentialité</a>
+
+          <div className="flex gap-4 mt-3 sm:mt-0">
+            <a className="hover:text-cyan-400 transition">Mentions légales</a>
+            <a className="hover:text-blue-400 transition">Confidentialité</a>
           </div>
         </div>
+
       </div>
+
+      {/* CSS ANIMATION KEYFRAMES (no hook) */}
+      <style>{`
+        @keyframes wave {
+          0% { transform: translateX(0) translateY(0); }
+          50% { transform: translateX(-25%) translateY(10px); }
+          100% { transform: translateX(0) translateY(0); }
+        }
+      `}</style>
+
     </footer>
   )
 }

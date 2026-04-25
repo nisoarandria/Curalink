@@ -34,7 +34,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/nutrition")
-@RequireUserTypes(UserType.NUTRITIONNISTE)
 public class NutritionArticleController {
 
 	private final NutritionArticleService nutritionArticleService;
@@ -92,6 +91,7 @@ public class NutritionArticleController {
 	}
 
 	@PostMapping(path = "/articles", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+	@RequireUserTypes(UserType.NUTRITIONNISTE)
 	public ResponseEntity<ArticleResponse> createArticle(
 			@RequestPart("titre") String titre,
 			@RequestPart("contenu") String contenu,
@@ -109,6 +109,7 @@ public class NutritionArticleController {
 	}
 
 	@PutMapping(path = "/articles/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+	@RequireUserTypes(UserType.NUTRITIONNISTE)
 	public ResponseEntity<ArticleResponse> updateArticle(
 			@PathVariable long id,
 			@RequestPart("titre") String titre,
@@ -126,6 +127,7 @@ public class NutritionArticleController {
 	}
 
 	@DeleteMapping("/articles/{id}")
+	@RequireUserTypes(UserType.NUTRITIONNISTE)
 	public ResponseEntity<Void> deleteArticle(
 			@PathVariable long id,
 			@AuthenticationPrincipal AuthenticatedUser currentUser) {

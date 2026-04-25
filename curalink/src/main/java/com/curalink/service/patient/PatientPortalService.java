@@ -138,7 +138,8 @@ public class PatientPortalService {
 				rdv.getMedecin().getId(),
 				rdv.getMedecin().getPrenom() + " " + rdv.getMedecin().getNom(),
 				rdv.getService().getNom(),
-				rdv.getMedecin().getAdresse());
+				rdv.getMedecin().getAdresse(),
+				rdv.getMedecin().getNumeroInscription());
 	}
 
 	private static int clampSize(int size) {
@@ -148,7 +149,6 @@ public class PatientPortalService {
 	private static boolean matchesSearch(Ordonnance o, String q) {
 		String medNom = (o.getConsultation().getMedecin().getNom() + " " + o.getConsultation().getMedecin().getPrenom())
 				.toLowerCase(Locale.ROOT);
-		String prescription = o.getPrescription() != null ? o.getPrescription().toLowerCase(Locale.ROOT) : "";
-		return medNom.contains(q) || prescription.contains(q);
+		return medNom.contains(q);
 	}
 }

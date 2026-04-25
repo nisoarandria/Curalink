@@ -15,6 +15,7 @@ public record RendezVousResponse(
 		long medecinId,
 		String medecinNomComplet,
 		String specialite,
-		String adresseCabinet
+		String adresseCabinet,
+		String numeroInscription
 ) {
 }

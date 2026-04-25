@@ -2,6 +2,7 @@ package com.curalink.service.rendezvous;
 
 import com.curalink.api.dto.PageResponse;
 import com.curalink.api.rendezvous.dto.CreateRendezVousRequest;
+import com.curalink.api.rendezvous.dto.MedecinRendezVousResumeResponse;
 import com.curalink.api.rendezvous.dto.RendezVousResponse;
 import com.curalink.model.catalog.ServiceItem;
 import com.curalink.model.rendezvous.RendezVous;
@@ -24,6 +25,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class RendezVousService {
@@ -52,7 +54,8 @@ public class RendezVousService {
 			int page,
 			int size,
 			String q,
-			LocalDate date) {
+			LocalDate date,
+			Integer month) {
 		User user = userRepository.findById(currentUser.userId())
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable"));
 		if (!(user instanceof Medecin medecin)) {
@@ -60,8 +63,8 @@ public class RendezVousService {
 		}
 
 		LocalDate effectiveDate = (date != null) ? date : LocalDate.now();
-		LocalDateTime start = effectiveDate.atStartOfDay();
-		LocalDateTime end = effectiveDate.plusDays(1).atStartOfDay();
+		LocalDateTime start = resolveStartDateTime(effectiveDate, month);
+		LocalDateTime end = resolveEndDateTime(effectiveDate, month);
 		String search = (q == null || q.isBlank()) ? "" : q.trim();
 
 		Pageable pageable = PageRequest.of(page, clampSize(size), Sort.by(Sort.Direction.ASC, "dateHeure"));
@@ -80,18 +83,49 @@ public class RendezVousService {
 			int page,
 			int size,
 			String q,
-			LocalDate date) {
+			LocalDate date,
+			Integer month) {
 		Medecin medecin = requireCurrentMedecin(currentUser);
 		if (medecin.getId() != medecinId) {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Acces refuse a ce planning medecin");
 		}
 		LocalDate effectiveDate = (date != null) ? date : LocalDate.now();
-		LocalDateTime start = effectiveDate.atStartOfDay();
-		LocalDateTime end = effectiveDate.plusDays(1).atStartOfDay();
+		LocalDateTime start = resolveStartDateTime(effectiveDate, month);
+		LocalDateTime end = resolveEndDateTime(effectiveDate, month);
 		String search = (q == null || q.isBlank()) ? "" : q.trim();
 		Pageable pageable = PageRequest.of(page, clampSize(size), Sort.by(Sort.Direction.ASC, "dateHeure"));
 		return PageResponse.from(rendezVousRepository.searchForMedecinByDate(
 				medecinId, start, end, search, pageable).map(RendezVousService::toResponse));
+	}
+
+	@Transactional(readOnly = true)
+	public MedecinRendezVousResumeResponse getResumeForMedecin(
+			AuthenticatedUser currentUser,
+			long medecinId) {
+		Medecin medecin = requireCurrentMedecin(currentUser);
+		if (medecin.getId() != medecinId) {
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Acces refuse a ce planning medecin");
+		}
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime threeMonthsAgo = now.minusMonths(3);
+
+		List<RendezVousResponse> historiques = rendezVousRepository
+				.findTop5ByMedecin_IdAndStatusAndDateHeureBetweenOrderByDateHeureDesc(
+						medecinId, RendezVousStatus.TERMINE, threeMonthsAgo, now)
+				.stream()
+				.map(RendezVousService::toResponse)
+				.toList();
+
+		List<RendezVousResponse> prochains = rendezVousRepository
+				.findTop5ByMedecin_IdAndDateHeureGreaterThanEqualAndStatusNotInOrderByDateHeureAsc(
+						medecinId,
+						now,
+						List.of(RendezVousStatus.TERMINE, RendezVousStatus.ABSENT, RendezVousStatus.ANNULE, RendezVousStatus.REFUSE))
+				.stream()
+				.map(RendezVousService::toResponse)
+				.toList();
+
+		return new MedecinRendezVousResumeResponse(historiques, prochains);
 	}
 
 	@Transactional
@@ -120,6 +154,22 @@ public class RendezVousService {
 	public RendezVousResponse proposer(AuthenticatedUser currentUser, long rendezVousId) {
 		RendezVous rdv = requireOwnedByMedecin(currentUser, rendezVousId);
 		requireCurrentStatus(rdv, RendezVousStatus.EN_ATTENTE);
+		rdv.setStatus(RendezVousStatus.PROPOSE);
+		return toResponse(rdv);
+	}
+
+	@Transactional
+	public RendezVousResponse proposerNouveauCreneau(
+			AuthenticatedUser currentUser,
+			long rendezVousId,
+			LocalDateTime nouvelleDateHeure) {
+		RendezVous rdv = requireOwnedByMedecin(currentUser, rendezVousId);
+		if (rdv.getStatus() != RendezVousStatus.EN_ATTENTE && rdv.getStatus() != RendezVousStatus.PROPOSE) {
+			throw new ResponseStatusException(
+					HttpStatus.BAD_REQUEST,
+					"Transition invalide: nouvelle proposition autorisee uniquement depuis EN_ATTENTE ou PROPOSE");
+		}
+		rdv.setDateHeure(nouvelleDateHeure);
 		rdv.setStatus(RendezVousStatus.PROPOSE);
 		return toResponse(rdv);
 	}
@@ -265,10 +315,35 @@ public class RendezVousService {
 				rdv.getMedecin().getId(),
 				rdv.getMedecin().getPrenom() + " " + rdv.getMedecin().getNom(),
 				rdv.getService().getNom(),
-				rdv.getMedecin().getAdresse());
+				rdv.getMedecin().getAdresse(),
+				rdv.getMedecin().getNumeroInscription());
 	}
 
 	private static int clampSize(int size) {
 		return Math.min(MAX_PAGE_SIZE, Math.max(1, size));
+	}
+
+	private static LocalDateTime resolveStartDateTime(LocalDate effectiveDate, Integer month) {
+		if (month == null) {
+			return effectiveDate.atStartOfDay();
+		}
+		validateMonth(month);
+		LocalDate firstDay = LocalDate.of(LocalDate.now().getYear(), month, 1);
+		return firstDay.atStartOfDay();
+	}
+
+	private static LocalDateTime resolveEndDateTime(LocalDate effectiveDate, Integer month) {
+		if (month == null) {
+			return effectiveDate.plusDays(1).atStartOfDay();
+		}
+		validateMonth(month);
+		LocalDate firstDay = LocalDate.of(LocalDate.now().getYear(), month, 1);
+		return firstDay.plusMonths(1).atStartOfDay();
+	}
+
+	private static void validateMonth(Integer month) {
+		if (month < 1 || month > 12) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le parametre month doit etre compris entre 1 et 12");
+		}
 	}
 }

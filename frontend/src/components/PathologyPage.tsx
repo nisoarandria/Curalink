@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { apiClient } from "@/services/axiosInstance"
+import { publicApiClient } from "@/services/axiosInstance"
 
 type ApiArticleItem = {
   id: number
@@ -96,7 +96,7 @@ export default function PathologyPage() {
       setLoading(true)
       setError(null)
       try {
-        const { data } = await apiClient.get<PageResponse<ApiArticleItem>>(
+        const { data } = await publicApiClient.get<PageResponse<ApiArticleItem>>(
           "/nutrition/articles",
           {
             params: {

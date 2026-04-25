@@ -23,10 +23,6 @@ public class ConstanteVitale {
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "consultation_id", nullable = false)
-	private Consultation consultation;
-
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "patient_id", nullable = false)
 	private Patient patient;
 
@@ -43,8 +39,7 @@ public class ConstanteVitale {
 	protected ConstanteVitale() {
 	}
 
-	public ConstanteVitale(Consultation consultation, Patient patient, LocalDate date, BigDecimal glycemie, String tension, BigDecimal poids, BigDecimal imc) {
-		this.consultation = consultation;
+	public ConstanteVitale(Patient patient, LocalDate date, BigDecimal glycemie, String tension, BigDecimal poids, BigDecimal imc) {
 		this.patient = patient;
 		this.date = date;
 		this.glycemie = glycemie;
@@ -55,10 +50,6 @@ public class ConstanteVitale {
 
 	public Long getId() {
 		return id;
-	}
-
-	public Consultation getConsultation() {
-		return consultation;
 	}
 
 	public Patient getPatient() {

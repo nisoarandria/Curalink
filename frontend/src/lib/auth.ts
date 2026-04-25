@@ -1,4 +1,4 @@
-export type UserType = "MEDECIN" | "PATIENT" | "NUTRITIONNISTE";
+export type UserType = "MEDECIN" | "PATIENT" | "NUTRITIONNISTE" | "ADMIN";
 
 export interface AuthUser {
   id: number | string;
@@ -57,6 +57,8 @@ export function getCurrentUser(): AuthUser | null {
 
 export function getDefaultPathByRole(userType?: string): string {
   switch (userType) {
+    case "ADMIN":
+      return "/admin";
     case "MEDECIN":
       return "/medecin";
     case "NUTRITIONNISTE":

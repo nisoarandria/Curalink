@@ -4,6 +4,7 @@ import com.curalink.api.rendezvous.dto.MedecinDisponibiliteResponse;
 import com.curalink.api.rendezvous.dto.MedecinOptionResponse;
 import com.curalink.api.rendezvous.dto.ServiceDisponibiliteResponse;
 import com.curalink.api.rendezvous.dto.ServiceOptionResponse;
+import com.curalink.config.ServiceItemStorageProperties;
 import com.curalink.model.catalog.ServiceItem;
 import com.curalink.model.disponibilite.Disponibilite;
 import com.curalink.model.disponibilite.JourSemaine;
@@ -11,9 +12,11 @@ import com.curalink.model.user.Medecin;
 import com.curalink.repository.DisponibiliteRepository;
 import com.curalink.repository.MedecinRepository;
 import com.curalink.repository.ServiceItemRepository;
+import jakarta.annotation.PostConstruct;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
@@ -27,20 +30,44 @@ public class DisponibiliteQueryService {
 	private final ServiceItemRepository serviceItemRepository;
 	private final MedecinRepository medecinRepository;
 	private final DisponibiliteRepository disponibiliteRepository;
+	private final ServiceItemStorageProperties storageProperties;
+	private String publicObjectBaseUrl;
 
 	public DisponibiliteQueryService(
 			ServiceItemRepository serviceItemRepository,
 			MedecinRepository medecinRepository,
-			DisponibiliteRepository disponibiliteRepository) {
+			DisponibiliteRepository disponibiliteRepository,
+			ServiceItemStorageProperties storageProperties) {
 		this.serviceItemRepository = serviceItemRepository;
 		this.medecinRepository = medecinRepository;
 		this.disponibiliteRepository = disponibiliteRepository;
+		this.storageProperties = storageProperties;
+	}
+
+	@PostConstruct
+	void initStorage() {
+		if (!StringUtils.hasText(storageProperties.supabaseUrl())
+				|| !StringUtils.hasText(storageProperties.bucket())
+				|| !StringUtils.hasText(storageProperties.apiKey())) {
+			this.publicObjectBaseUrl = null;
+			return;
+		}
+		String base = storageProperties.supabaseUrl().trim();
+		if (base.endsWith("/")) {
+			base = base.substring(0, base.length() - 1);
+		}
+		String bucket = storageProperties.bucket().trim();
+		this.publicObjectBaseUrl = base + "/storage/v1/object/public/" + bucket + "/";
 	}
 
 	@Transactional(readOnly = true)
 	public List<ServiceOptionResponse> listServices() {
 		return serviceItemRepository.findAllByOrderByNomAsc().stream()
-				.map(s -> new ServiceOptionResponse(s.getId(), s.getNom()))
+				.map(s -> new ServiceOptionResponse(
+						s.getId(),
+						s.getNom(),
+						s.getDescription(),
+						buildPublicUrl(s.getIllustrationFile())))
 				.toList();
 	}
 
@@ -53,7 +80,8 @@ public class DisponibiliteQueryService {
 						m.getId(),
 						formatMedecinName(m),
 						service.getNom(),
-						m.getAdresse()))
+						m.getAdresse(),
+						m.getNumeroInscription()))
 				.toList();
 	}
 
@@ -135,6 +163,16 @@ public class DisponibiliteQueryService {
 
 	private static String formatMedecinName(Medecin medecin) {
 		return "Dr " + medecin.getPrenom() + " " + medecin.getNom();
+	}
+
+	private String buildPublicUrl(String objectKey) {
+		if (!StringUtils.hasText(objectKey)) {
+			return null;
+		}
+		if (!StringUtils.hasText(publicObjectBaseUrl)) {
+			return objectKey;
+		}
+		return publicObjectBaseUrl + objectKey;
 	}
 
 	private record Occurrence(Medecin medecin, LocalDate date, java.time.LocalTime heure) {
