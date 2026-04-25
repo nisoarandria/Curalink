@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { apiClient } from "@/services/axiosInstance";
+import { publicApiClient } from "@/services/axiosInstance";
 
 type ArticleDetails = {
   id: number;
@@ -57,7 +57,7 @@ export default function ArticlePage() {
       setLoading(true);
       setError(null);
       try {
-        const { data } = await apiClient.get<ArticleDetails>(
+        const { data } = await publicApiClient.get<ArticleDetails>(
           `/nutrition/articles/${articleId}`,
         );
         setArticle(data ?? null);

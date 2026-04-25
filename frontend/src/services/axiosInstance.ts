@@ -58,6 +58,12 @@ export const publicClient = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// 4. Client public sur /api (sans Authorization) pour endpoints ouverts sous /api
+export const publicApiClient = axios.create({
+  baseURL,
+  headers: { "Content-Type": "application/json" },
+});
+
 export async function logoutRequest() {
   return apiClient.post("/auth/logout");
 }

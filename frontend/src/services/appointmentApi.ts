@@ -45,6 +45,20 @@ export type RendezVousResponse = {
   medecinNomComplet: string;
 };
 
+export type StaffRole = "MEDECIN" | "NUTRITIONNISTE";
+
+export type CreateStaffPayload = {
+  email: string;
+  nom: string;
+  prenom: string;
+  telephone: string;
+  adresseCabinet: string;
+  adresse?: string;
+  role: StaffRole;
+  numeroInscription?: string;
+  serviceId?: number;
+};
+
 export type PageResponse<T> = {
   content: T[];
   page: number;
@@ -137,5 +151,11 @@ export async function createRendezVous(body: {
     "/rendezvous",
     body
   );
+  return data;
+}
+
+/** Créer un utilisateur staff (ADMIN) */
+export async function createStaff(body: CreateStaffPayload) {
+  const { data } = await apiClient.post("/admin/staff", body);
   return data;
 }

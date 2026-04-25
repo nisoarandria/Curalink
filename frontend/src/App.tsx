@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import LoginForm from "./pages/auth/LoginForm";
 import DoctorDashboard from "./components/DoctorDashboard";
+import AdminDashboard from "./components/AdminDashboard";
 import PublicHomePage from "./components/PublicHomePage";
 import PatientDashboard from "./components/PatientDashboard";
 import NutritionistDashboard from "./components/NutritionistDashboard";
@@ -19,6 +20,9 @@ export default function App() {
         <Route path="/register/patient" element={<RegisterPatientPage />} />
         <Route element={<ProtectedRoute allowedRoles={["MEDECIN"]} />}>
           <Route path="/medecin" element={<DoctorDashboard />} />
+        </Route>
+        <Route element={<ProtectedRoute allowedRoles={["ADMIN"]} />}>
+          <Route path="/admin" element={<AdminDashboard />} />
         </Route>
         <Route element={<ProtectedRoute allowedRoles={["PATIENT"]} />}>
           <Route path="/patient" element={<PatientDashboard />} />

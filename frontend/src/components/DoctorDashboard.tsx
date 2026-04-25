@@ -1,4 +1,6 @@
 import {
+  useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -21,17 +23,23 @@ import {
 import CalendarView from "./CalendarView";
 import { PatientRecordView } from "./PatientMedicalRecord";
 import type { PatientRecord, VitalSign } from "./PatientMedicalRecord";
+import MedecinDisponibilitesPage from "@/components/medecin/MedecinDisponibilitesPage";
 import { useAuth } from "@/hooks/useAuth";
-import { logoutRequest } from "@/services/axiosInstance";
-
-type AppointmentStatus = "confirme" | "en_cours" | "termine";
+import {
+  apiClient,
+  apiClientMultipart,
+  logoutRequest,
+} from "@/services/axiosInstance";
 
 type Appointment = {
   id: string;
+  patientId: number;
   date: string;
   heure: string;
   motif: string;
-  status: AppointmentStatus;
+  serviceNom?: string;
+  adresseCabinet?: string;
+  status: RendezVousApiStatus;
   patient: PatientRecord;
 };
 
@@ -117,75 +125,133 @@ const ADMINISTRATION_ROUTES = [
 ] as const;
 
 const initialAppointments: Appointment[] = [
-  {
-    id: "rdv-001",
-    date: today,
-    heure: "09:00",
-    motif: "Fatigue persistante",
-    status: "confirme",
-    patient: {
-      id: "pat-001",
-      nom: "Ravo",
-      prenom: "Aina",
-      sexe: "F",
-      dateNaissance: "1992-03-14",
-      numeroDossier: "DM-2026-101",
-      contact: "+261 34 00 000 01",
-      adresse: "Antananarivo",
-      antecedents: [{ id: "ant-1", label: "Hypertension artérielle" }],
-      constantes: [
-        {
-          date: "2026-04-18",
-          tension: "13/8",
-          glycemie: "0.98",
-          poids: "62",
-          imc: "23.4",
-        },
-      ],
-      historiqueConsultations: [
-        {
-          date: "2026-04-18",
-          motif: "Céphalées",
-          diagnostic: "Migraine sans aura",
-        },
-      ],
-    },
-  },
-  {
-    id: "rdv-002",
-    date: today,
-    heure: "11:30",
-    motif: "Suivi diabète",
-    status: "confirme",
-    patient: {
-      id: "pat-002",
-      nom: "Rakoto",
-      prenom: "Mamy",
-      sexe: "M",
-      dateNaissance: "1980-08-02",
-      numeroDossier: "DM-2026-205",
-      contact: "+261 34 00 000 02",
-      adresse: "Fianarantsoa",
-      antecedents: [{ id: "ant-2", label: "Diabète type 2" }],
-      constantes: [
-        {
-          date: "2026-04-19",
-          tension: "12/8",
-          glycemie: "1.45",
-          poids: "78",
-          imc: "27.0",
-        },
-      ],
-      historiqueConsultations: [
-        {
-          date: "2026-04-19",
-          motif: "Bilan trimestriel",
-          diagnostic: "Diabète équilibré partiellement",
-        },
-      ],
-    },
-  },
 ];
+
+type RendezVousApiStatus =
+  | "EN_ATTENTE"
+  | "PROPOSE"
+  | "CONFIRME"
+  | "REFUSE"
+  | "ANNULE"
+  | "TERMINE"
+  | "ABSENT";
+
+type RendezVousResponse = {
+  id: number;
+  dateHeure: string;
+  status: RendezVousApiStatus;
+  serviceNom?: string;
+  patientId: number;
+  patientNomComplet: string;
+  adresseCabinet?: string;
+};
+
+type PageResponse<T> = {
+  content: T[];
+};
+
+type PatientDetailResponse = {
+  id: number;
+  nom: string;
+  prenom: string;
+  telephone?: string;
+  adresse?: string;
+  dateNaissance?: string;
+  sexe?: string;
+};
+
+type AntecedentResponse = {
+  id: number;
+  description: string;
+};
+
+type ConsultationResponse = {
+  id: number;
+  rendezVousId?: number;
+  motif: string;
+  diagnostic: string;
+  date: string;
+};
+
+type ConstanteResponse = {
+  id: number;
+  date: string;
+  glycemie: number;
+  tension: string;
+  poids: number;
+  imc: number;
+};
+
+const splitFullName = (fullName: string) => {
+  const nameParts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (nameParts.length <= 1) {
+    return { nom: nameParts[0] ?? "Patient", prenom: "" };
+  }
+  return {
+    nom: nameParts[0],
+    prenom: nameParts.slice(1).join(" "),
+  };
+};
+
+const mapRendezVousToAppointment = (rdv: RendezVousResponse): Appointment => {
+  const dateObj = new Date(rdv.dateHeure);
+  const date = Number.isNaN(dateObj.getTime())
+    ? today
+    : dateObj.toISOString().slice(0, 10);
+  const heure =
+    Number.isNaN(dateObj.getTime()) || !rdv.dateHeure.includes("T")
+      ? "00:00"
+      : rdv.dateHeure.split("T")[1]?.slice(0, 5) ?? "00:00";
+  const { nom, prenom } = splitFullName(rdv.patientNomComplet);
+
+  return {
+    id: String(rdv.id),
+    patientId: rdv.patientId,
+    date,
+    heure,
+    motif: rdv.serviceNom || "Consultation",
+    serviceNom: rdv.serviceNom,
+    adresseCabinet: rdv.adresseCabinet,
+    status: rdv.status,
+    patient: {
+      id: String(rdv.patientId),
+      nom,
+      prenom,
+      sexe: "F",
+      dateNaissance: "-",
+      numeroDossier: `PAT-${rdv.patientId}`,
+      contact: "-",
+      adresse: "-",
+      antecedents: [],
+      constantes: [],
+      historiqueConsultations: [],
+    },
+  };
+};
+
+const formatDateFrCompact = (value: string) => {
+  if (!value || value === "-") return value || "-";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  const monthIndex = Number(month) - 1;
+  const months = [
+    "Janvier",
+    "Fevrier",
+    "Mars",
+    "Avril",
+    "Mai",
+    "Juin",
+    "Juillet",
+    "Aout",
+    "Septembre",
+    "Octobre",
+    "Novembre",
+    "Decembre",
+  ];
+  const monthLabel = months[monthIndex];
+  if (!monthLabel) return value;
+  return `${day} ${monthLabel} ${year}`;
+};
 
 export default function DoctorDashboard() {
   const navigate = useNavigate();
@@ -209,11 +275,32 @@ export default function DoctorDashboard() {
   const [isPlanningDetailsModalOpen, setIsPlanningDetailsModalOpen] =
     useState(false);
   const [isDiagnosisModalOpen, setIsDiagnosisModalOpen] = useState(false);
+  const [appointmentsLoading, setAppointmentsLoading] = useState(false);
+  const [appointmentsError, setAppointmentsError] = useState<string | null>(null);
+  const [appointmentActionLoadingId, setAppointmentActionLoadingId] = useState<
+    string | null
+  >(null);
+  const [appointmentActionError, setAppointmentActionError] = useState<
+    string | null
+  >(null);
+  const [proposerModalRdvId, setProposerModalRdvId] = useState<string | null>(
+    null,
+  );
+  const [proposerDateHeure, setProposerDateHeure] = useState("");
+  const [isSubmittingProposer, setIsSubmittingProposer] = useState(false);
+  const [patientDetailsLoading, setPatientDetailsLoading] = useState(false);
+  const [patientDetailsError, setPatientDetailsError] = useState<string | null>(
+    null,
+  );
   const [consultationStep, setConsultationStep] = useState<1 | 2 | 3>(1);
 
   const [consultationDate, setConsultationDate] = useState(today);
   const [consultationMotif, setConsultationMotif] = useState("");
   const [consultationDiagnostic, setConsultationDiagnostic] = useState("");
+  const [consultationFlowError, setConsultationFlowError] = useState<
+    string | null
+  >(null);
+  const [isFinalizingConsultation, setIsFinalizingConsultation] = useState(false);
 
   const [antecedentInput, setAntecedentInput] = useState("");
   const [newVital, setNewVital] = useState<VitalSign>({
@@ -247,37 +334,241 @@ export default function DoctorDashboard() {
   const [signatureSource, setSignatureSource] = useState<
     "pad" | "image" | null
   >(null);
+  const [prescriptionPdfBlob, setPrescriptionPdfBlob] = useState<Blob | null>(
+    null,
+  );
+  const [prescriptionPdfFileName, setPrescriptionPdfFileName] =
+    useState<string>("");
+  const medecinId = Number(user?.id);
 
-  const [availabilities, setAvailabilities] = useState<Availability[]>([
+  const [availabilities] = useState<Availability[]>([
     { id: "disp-1", date: today, debut: "14:00", fin: "17:00" },
   ]);
-  const [availabilityDraft, setAvailabilityDraft] = useState<Availability>({
-    id: "",
-    date: today,
-    debut: "",
-    fin: "",
-  });
-  const [editingAvailabilityId, setEditingAvailabilityId] = useState<
-    string | null
-  >(null);
 
   const filteredAppointments = useMemo(
     () => appointments.filter((rdv) => rdv.date === selectedDate),
     [appointments, selectedDate],
   );
+  const recentCompletedAppointments = useMemo(() => {
+    const now = new Date();
+    const lastThreeMonths = new Date(now);
+    lastThreeMonths.setMonth(lastThreeMonths.getMonth() - 3);
+
+    return appointments
+      .filter((rdv) => {
+        if (rdv.status !== "TERMINE") return false;
+        const appointmentDate = new Date(`${rdv.date}T00:00:00`);
+        return appointmentDate >= lastThreeMonths && appointmentDate <= now;
+      })
+      .sort(
+        (a, b) =>
+          new Date(`${b.date}T${b.heure}`).getTime() -
+          new Date(`${a.date}T${a.heure}`).getTime(),
+      );
+  }, [appointments]);
+  const upcomingAppointments = useMemo(() => {
+    const now = new Date();
+
+    return appointments
+      .filter((rdv) => new Date(`${rdv.date}T${rdv.heure}:00`) >= now)
+      .sort(
+        (a, b) =>
+          new Date(`${a.date}T${a.heure}:00`).getTime() -
+          new Date(`${b.date}T${b.heure}:00`).getTime(),
+      );
+  }, [appointments]);
 
   const selectedAppointment =
     appointments.find((rdv) => rdv.id === selectedAppointmentId) ?? null;
 
-  const markAppointmentStatus = (id: string, status: AppointmentStatus) => {
+  const loadAppointments = useCallback(async () => {
+    if (!Number.isFinite(medecinId)) {
+      setAppointments([]);
+      return;
+    }
+    setAppointmentsLoading(true);
+    setAppointmentsError(null);
+    try {
+      const { data } = await apiClient.get<PageResponse<RendezVousResponse>>(
+        `/rendezvous/medecins/${medecinId}/rendezvous`,
+        {
+          params: {
+            date: selectedDate,
+            page: 0,
+            size: 20,
+          },
+        },
+      );
+      setAppointments((data.content ?? []).map(mapRendezVousToAppointment));
+    } catch {
+      setAppointments([]);
+      setAppointmentsError("Impossible de charger les rendez-vous.");
+    } finally {
+      setAppointmentsLoading(false);
+    }
+  }, [medecinId, selectedDate]);
+
+  useEffect(() => {
+    void loadAppointments();
+  }, [loadAppointments]);
+
+  const markAppointmentStatus = (id: string, status: RendezVousApiStatus) => {
     setAppointments((prev) =>
       prev.map((rdv) => (rdv.id === id ? { ...rdv, status } : rdv)),
     );
   };
 
-  const openPatientRecord = (id: string) => {
-    setSelectedAppointmentId(id);
-    setIsDiagnosisModalOpen(false);
+  const getStatusActions = (status: RendezVousApiStatus) => {
+    if (status === "EN_ATTENTE") {
+      return [
+        { label: "Valider", action: "confirmer", variant: "outline" as const },
+        { label: "Proposer", action: "proposer-creneau", variant: "outline" as const },
+      ];
+    }
+    if (status === "PROPOSE") {
+      return [
+        { label: "Valider", action: "confirmer", variant: "outline" as const },
+        { label: "Proposer", action: "proposer-creneau", variant: "outline" as const },
+      ];
+    }
+    if (status === "CONFIRME") {
+      return [
+        { label: "Terminer", action: "terminer", variant: "outline" as const },
+        { label: "Absent", action: "absent", variant: "outline" as const },
+        { label: "Annuler", action: "annuler", variant: "destructive" as const },
+      ];
+    }
+    return [];
+  };
+
+  const applyRendezVousAction = async (rdvId: string, action: string) => {
+    if (action === "proposer-creneau") {
+      setAppointmentActionError(null);
+      setProposerModalRdvId(rdvId);
+      setProposerDateHeure("");
+      return;
+    }
+    setAppointmentActionLoadingId(rdvId);
+    setAppointmentActionError(null);
+    try {
+      await apiClient.patch(`/rendezvous/${rdvId}/${action}`);
+      await loadAppointments();
+    } catch (error) {
+      const apiError = error as {
+        response?: { data?: { error?: string; message?: string } };
+      };
+      const apiMessage =
+        apiError?.response?.data?.error ?? apiError?.response?.data?.message ?? "";
+      if (
+        apiMessage.toLowerCase().includes("transition de statut invalide") ||
+        apiMessage.toLowerCase().includes("transition")
+      ) {
+        setAppointmentActionError(
+          "Transition de statut invalide. La liste a été rechargée avec le statut courant.",
+        );
+        await loadAppointments();
+      } else {
+        setAppointmentActionError("Impossible de mettre à jour ce rendez-vous.");
+      }
+    } finally {
+      setAppointmentActionLoadingId(null);
+    }
+  };
+
+  const submitProposerCreneau = async () => {
+    if (!proposerModalRdvId) return;
+    if (!proposerDateHeure) {
+      setAppointmentActionError(
+        "Veuillez renseigner une nouvelle date et heure pour proposer un créneau.",
+      );
+      return;
+    }
+    const normalizedDateHeure = proposerDateHeure.length === 16
+      ? `${proposerDateHeure}:00`
+      : proposerDateHeure;
+    setIsSubmittingProposer(true);
+    setAppointmentActionError(null);
+    try {
+      await apiClient.patch(
+        `/rendezvous/${proposerModalRdvId}/proposer-creneau`,
+        {
+          dateHeure: normalizedDateHeure,
+        },
+      );
+      setProposerModalRdvId(null);
+      setProposerDateHeure("");
+      await loadAppointments();
+    } catch {
+      setAppointmentActionError("Impossible de proposer ce nouveau créneau.");
+    } finally {
+      setIsSubmittingProposer(false);
+    }
+  };
+
+  const openPatientRecord = async (id: string) => {
+    const rdv = appointments.find((item) => item.id === id);
+    if (!rdv) return;
+    setPatientDetailsLoading(true);
+    setPatientDetailsError(null);
+    try {
+      const [patientDetailRes, antecedentsRes, constantesRes, consultationsRes] =
+        await Promise.all([
+          apiClient.get<PatientDetailResponse>(`/medecins/me/patients/${rdv.patientId}`),
+          apiClient.get<AntecedentResponse[]>(
+            `/medecins/me/patients/${rdv.patientId}/antecedents`,
+          ),
+          apiClient.get<ConstanteResponse[]>(
+            `/medecins/me/patients/${rdv.patientId}/constantes`,
+          ),
+          apiClient.get<ConsultationResponse[]>(
+            `/medecins/me/patients/${rdv.patientId}/consultations`,
+          ),
+        ]);
+
+      const patientDetail = patientDetailRes.data;
+      const nextPatient: PatientRecord = {
+        id: String(patientDetail.id),
+        nom: patientDetail.nom,
+        prenom: patientDetail.prenom,
+        sexe: patientDetail.sexe === "HOMME" ? "M" : "F",
+        dateNaissance: patientDetail.dateNaissance ?? "-",
+        numeroDossier: `PAT-${patientDetail.id}`,
+        contact: patientDetail.telephone ?? "-",
+        adresse: patientDetail.adresse ?? "-",
+        antecedents: (antecedentsRes.data ?? []).map((ant) => ({
+          id: String(ant.id),
+          label: ant.description,
+        })),
+        constantes: (constantesRes.data ?? []).map((cst) => ({
+          id: String(cst.id),
+          date: cst.date,
+          tension: cst.tension,
+          glycemie: String(cst.glycemie),
+          poids: String(cst.poids),
+          imc: String(cst.imc),
+        })),
+        historiqueConsultations: (consultationsRes.data ?? []).map((consult) => ({
+          id: String(consult.id),
+          rendezVousId:
+            consult.rendezVousId !== undefined
+              ? String(consult.rendezVousId)
+              : undefined,
+          date: consult.date,
+          motif: consult.motif,
+          diagnostic: consult.diagnostic,
+        })),
+      };
+
+      setAppointments((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, patient: nextPatient } : item)),
+      );
+      setSelectedAppointmentId(id);
+      setIsDiagnosisModalOpen(false);
+    } catch {
+      setPatientDetailsError("Impossible de charger le dossier patient.");
+    } finally {
+      setPatientDetailsLoading(false);
+    }
   };
 
   const openConsultation = (id: string) => {
@@ -286,56 +577,121 @@ export default function DoctorDashboard() {
     setConsultationDate(today);
     setConsultationMotif("");
     setConsultationDiagnostic("");
+    setConsultationFlowError(null);
+    setPrescriptionPdfBlob(null);
+    setPrescriptionPdfFileName("");
     clearSignatureCanvas();
     setIsDiagnosisModalOpen(true);
-    markAppointmentStatus(id, "en_cours");
+    markAppointmentStatus(id, "CONFIRME");
   };
 
-  const addAntecedent = () => {
+  const addAntecedent = async () => {
     if (!selectedAppointment || !antecedentInput.trim()) return;
     const value = antecedentInput.trim();
-    setAppointments((prev) =>
-      prev.map((rdv) =>
-        rdv.id === selectedAppointment.id
-          ? {
-              ...rdv,
-              patient: {
-                ...rdv.patient,
-                antecedents: [
-                  ...rdv.patient.antecedents,
-                  { id: crypto.randomUUID(), label: value },
-                ],
-              },
-            }
-          : rdv,
-      ),
-    );
-    setAntecedentInput("");
+    try {
+      const { data } = await apiClient.post<{ id: number; description: string }>(
+        `/patients/${selectedAppointment.patientId}/antecedents`,
+        { description: value },
+      );
+      setAppointments((prev) =>
+        prev.map((rdv) =>
+          rdv.id === selectedAppointment.id
+            ? {
+                ...rdv,
+                patient: {
+                  ...rdv.patient,
+                  antecedents: [
+                    ...rdv.patient.antecedents,
+                    { id: String(data.id), label: data.description },
+                  ],
+                },
+              }
+            : rdv,
+        ),
+      );
+      setAntecedentInput("");
+    } catch {
+      setPatientDetailsError("Échec lors de l'ajout de l'antécédent.");
+    }
   };
 
-  const addVitalSign = () => {
+  const addVitalSign = async () => {
+    setPatientDetailsError(null);
     if (
       !selectedAppointment ||
       !newVital.tension ||
       !newVital.glycemie ||
       !newVital.poids ||
       !newVital.imc
-    )
+    ) {
+      setPatientDetailsError(
+        "Veuillez remplir tous les champs des constantes avant d'ajouter.",
+      );
       return;
-    setAppointments((prev) =>
-      prev.map((rdv) =>
-        rdv.id === selectedAppointment.id
-          ? {
-              ...rdv,
-              patient: {
-                ...rdv.patient,
-                constantes: [...rdv.patient.constantes, newVital],
-              },
-            }
-          : rdv,
-      ),
-    );
-    setNewVital({ date: today, tension: "", glycemie: "", poids: "", imc: "" });
+    }
+
+    if (!selectedAppointment.patientId) {
+      setPatientDetailsError(
+        "ID patient introuvable pour cette card.",
+      );
+      return;
+    }
+
+    const glycemie = Number(newVital.glycemie);
+    const poids = Number(newVital.poids);
+    const imc = Number(newVital.imc);
+    if (
+      Number.isNaN(glycemie) ||
+      Number.isNaN(poids) ||
+      Number.isNaN(imc)
+    ) {
+      setPatientDetailsError(
+        "Glycémie, poids et IMC doivent être des valeurs numériques valides.",
+      );
+      return;
+    }
+
+    try {
+      const payload = {
+        date: newVital.date,
+        glycemie,
+        tension: newVital.tension,
+        poids,
+        imc,
+      };
+      const { data } = await apiClient.post<ConstanteResponse>(
+        `/${selectedAppointment.patientId}/constantes`,
+        payload,
+      );
+      setAppointments((prev) =>
+        prev.map((rdv) =>
+          rdv.id === selectedAppointment.id
+            ? {
+                ...rdv,
+                patient: {
+                  ...rdv.patient,
+                  constantes: [
+                    ...rdv.patient.constantes,
+                    {
+                      id: String(data.id),
+                      date: data.date,
+                      tension: data.tension,
+                      glycemie: String(data.glycemie),
+                      poids: String(data.poids),
+                      imc: String(data.imc),
+                    },
+                  ],
+                },
+              }
+            : rdv,
+        ),
+      );
+      setNewVital({ date: today, tension: "", glycemie: "", poids: "", imc: "" });
+    } catch {
+      setPatientDetailsError(
+        "Échec lors de l'ajout des constantes. Vérifiez que la consultation est valide.",
+      );
+    }
   };
 
   const saveClinicalStep = () => {
@@ -345,6 +701,9 @@ export default function DoctorDashboard() {
       !consultationDiagnostic.trim()
     )
       return;
+    setConsultationFlowError(null);
+    setPrescriptionPdfBlob(null);
+    setPrescriptionPdfFileName("");
     setAppointments((prev) =>
       prev.map((rdv) =>
         rdv.id === selectedAppointment.id
@@ -486,10 +845,8 @@ export default function DoctorDashboard() {
     event.target.value = "";
   };
 
-  const generatePrescriptionPdf = () => {
-    if (!selectedAppointment) return;
-
-    const validLines = prescriptionLines.filter(
+  const getValidPrescriptionLines = () =>
+    prescriptionLines.filter(
       (line) =>
         line.medicament.trim() ||
         line.dosage.trim() ||
@@ -499,10 +856,17 @@ export default function DoctorDashboard() {
         getFinalModeAdministration(line) ||
         line.instructions.trim(),
     );
-    if (validLines.length === 0) return;
 
+  const createPrescriptionDocument = () => {
+    if (!selectedAppointment) return null;
+    const validLines = getValidPrescriptionLines();
+    if (validLines.length === 0) return null;
     const doc = new jsPDF({ unit: "mm", format: "a4" });
     const pageWidth = doc.internal.pageSize.getWidth();
+    const cabinetAddress = selectedAppointment.adresseCabinet || "Adresse non renseignée";
+    const doctorPhone = user?.email || "Téléphone non renseigné";
+    const patientSexeLabel =
+      selectedAppointment.patient.sexe === "M" ? "Homme" : "Femme";
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(16);
@@ -511,32 +875,41 @@ export default function DoctorDashboard() {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(11);
     doc.text(`Dr ${displayName}`, 14, 30);
-    doc.text("N° RPPS: 00000000000", 14, 36);
-    doc.text("Cabinet: Antananarivo", 14, 42);
-    doc.text(`Date: ${consultationDate}`, pageWidth - 14, 30, {
+    doc.text(`Specialite: ${roleLabel}`, 14, 36);
+    doc.text("N° RPPS: 00000000000", 14, 42);
+    doc.text(`Cabinet: ${cabinetAddress}`, 14, 48);
+    doc.text(`Contact: ${doctorPhone}`, 14, 54);
+    doc.text(`Date: ${formatDateFrCompact(consultationDate)}`, pageWidth - 14, 30, {
       align: "right",
     });
 
     doc.setLineWidth(0.4);
-    doc.line(14, 48, pageWidth - 14, 48);
+    doc.line(14, 60, pageWidth - 14, 60);
 
     doc.setFont("helvetica", "bold");
-    doc.text("Patient", 14, 58);
+    doc.text("Patient", 14, 68);
     doc.setFont("helvetica", "normal");
     doc.text(
-      `${selectedAppointment.patient.prenom} ${selectedAppointment.patient.nom} | ${selectedAppointment.patient.sexe} | Ne(e) le ${selectedAppointment.patient.dateNaissance}`,
+      `${selectedAppointment.patient.prenom} ${selectedAppointment.patient.nom} | ${patientSexeLabel} | Ne(e) le ${formatDateFrCompact(selectedAppointment.patient.dateNaissance)}`,
       14,
-      64,
+      74,
     );
-    doc.text(`Dossier: ${selectedAppointment.patient.numeroDossier}`, 14, 70);
+    doc.text(
+      `Motif: ${consultationMotif.trim() || selectedAppointment.motif}`,
+      14,
+      80,
+    );
+    if (consultationDiagnostic.trim()) {
+      doc.text(`Indication: ${consultationDiagnostic.trim()}`, 14, 86);
+    }
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(20);
-    doc.text("R/", 14, 84);
+    doc.text("R/", 14, 102);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(11);
-    let y = 94;
+    let y = 112;
     validLines.forEach((line, index) => {
       const chunks = [
         `${index + 1}. ${line.medicament || "Medicament"} ${line.dosage ? `- ${line.dosage}` : ""} ${getFinalForme(line) ? `(${getFinalForme(line)})` : ""}`,
@@ -567,71 +940,128 @@ export default function DoctorDashboard() {
       doc.addImage(signatureDataUrl, format, pageWidth - 64, 246, 46, 18);
     }
 
-    doc.save(
-      `ordonnance-${selectedAppointment.patient.id}-${consultationDate}.pdf`,
-    );
-    setConsultationStep(3);
+    const fileName = `ordonnance-${selectedAppointment.patient.id}-${consultationDate}.pdf`;
+    return { doc, fileName };
   };
 
-  const endConsultation = () => {
-    if (!selectedAppointment) return;
-    markAppointmentStatus(selectedAppointment.id, "termine");
-    setSelectedAppointmentId(null);
-    setIsDiagnosisModalOpen(false);
-    setConsultationStep(1);
-    setPrescriptionLines([
-      {
-        id: crypto.randomUUID(),
-        medicament: "",
-        dosage: "",
-        forme: "",
-        formeAutre: "",
-        posologie: "",
-        posologieAutre: "",
-        duree: "",
-        modeAdministration: "",
-        modeAdministrationAutre: "",
-        instructions: "",
-      },
-    ]);
-    clearSignatureCanvas();
-  };
-
-  const saveAvailability = () => {
-    if (
-      !availabilityDraft.date ||
-      !availabilityDraft.debut ||
-      !availabilityDraft.fin
-    )
-      return;
-    if (editingAvailabilityId) {
-      setAvailabilities((prev) =>
-        prev.map((disp) =>
-          disp.id === editingAvailabilityId
-            ? { ...availabilityDraft, id: editingAvailabilityId }
-            : disp,
-        ),
+  const generatePrescriptionPdf = () => {
+    setConsultationFlowError(null);
+    const payload = createPrescriptionDocument();
+    if (!payload) {
+      setConsultationFlowError(
+        "Veuillez saisir au moins une ligne d'ordonnance avant de continuer.",
       );
-      setEditingAvailabilityId(null);
-    } else {
-      setAvailabilities((prev) => [
-        ...prev,
-        { ...availabilityDraft, id: crypto.randomUUID() },
-      ]);
+      return;
     }
-    setAvailabilityDraft({ id: "", date: today, debut: "", fin: "" });
+    const { doc, fileName } = payload;
+    const pdfBlob = doc.output("blob");
+    setPrescriptionPdfBlob(pdfBlob);
+    setPrescriptionPdfFileName(fileName);
+    doc.save(
+      fileName,
+    );
   };
 
-  const editAvailability = (availability: Availability) => {
-    setEditingAvailabilityId(availability.id);
-    setAvailabilityDraft(availability);
-  };
+  const endConsultation = async () => {
+    if (!selectedAppointment) return;
+    setConsultationFlowError(null);
+    const rendezVousId = Number(selectedAppointment.id);
+    if (!Number.isFinite(rendezVousId) || !Number.isFinite(medecinId)) {
+      setConsultationFlowError("Impossible de finaliser : identifiants invalides.");
+      return;
+    }
+    if (!consultationMotif.trim() || !consultationDiagnostic.trim()) {
+      setConsultationFlowError(
+        "Veuillez renseigner motif et diagnostic avant de terminer la consultation.",
+      );
+      return;
+    }
 
-  const deleteAvailability = (id: string) => {
-    setAvailabilities((prev) => prev.filter((disp) => disp.id !== id));
-    if (editingAvailabilityId === id) {
-      setEditingAvailabilityId(null);
-      setAvailabilityDraft({ id: "", date: today, debut: "", fin: "" });
+    let pdfBlobToUpload = prescriptionPdfBlob;
+    let pdfFileNameToUpload = prescriptionPdfFileName;
+    if (!pdfBlobToUpload) {
+      const generated = createPrescriptionDocument();
+      if (!generated) {
+        setConsultationFlowError(
+          "Veuillez saisir au moins une ligne d'ordonnance avant de continuer.",
+        );
+        return;
+      }
+      pdfBlobToUpload = generated.doc.output("blob");
+      pdfFileNameToUpload = generated.fileName;
+      setPrescriptionPdfBlob(pdfBlobToUpload);
+      setPrescriptionPdfFileName(pdfFileNameToUpload);
+    }
+
+    setIsFinalizingConsultation(true);
+    try {
+      const consultationFromHistory =
+        selectedAppointment.patient.historiqueConsultations.find(
+          (consultation) =>
+            consultation.rendezVousId === selectedAppointment.id &&
+            consultation.id,
+        )?.id ?? null;
+
+      let consultationIdToUse =
+        consultationFromHistory && !Number.isNaN(Number(consultationFromHistory))
+          ? Number(consultationFromHistory)
+          : null;
+
+      if (!consultationIdToUse) {
+        const { data: createdConsultation } = await apiClient.post<{ id: number }>(
+          "/consultations",
+          {
+            rendezVousId,
+            patientId: selectedAppointment.patientId,
+            medecinId,
+            motif: consultationMotif.trim(),
+            diagnostic: consultationDiagnostic.trim(),
+            date: consultationDate,
+          },
+        );
+        consultationIdToUse = createdConsultation.id;
+      }
+
+      const formData = new FormData();
+      formData.append(
+        "pdfContent",
+        pdfBlobToUpload,
+        pdfFileNameToUpload || `ordonnance-${selectedAppointment.id}.pdf`,
+      );
+      await apiClientMultipart.post(
+        `/consultations/${consultationIdToUse}/ordonnance`,
+        formData,
+      );
+      await apiClient.patch(`/rendezvous/${selectedAppointment.id}/terminer`);
+
+      markAppointmentStatus(selectedAppointment.id, "TERMINE");
+      setSelectedAppointmentId(null);
+      setIsDiagnosisModalOpen(false);
+      setConsultationStep(1);
+      setPrescriptionLines([
+        {
+          id: crypto.randomUUID(),
+          medicament: "",
+          dosage: "",
+          forme: "",
+          formeAutre: "",
+          posologie: "",
+          posologieAutre: "",
+          duree: "",
+          modeAdministration: "",
+          modeAdministrationAutre: "",
+          instructions: "",
+        },
+      ]);
+      setPrescriptionPdfBlob(null);
+      setPrescriptionPdfFileName("");
+      clearSignatureCanvas();
+    } catch {
+      setConsultationFlowError(
+        "Échec de la finalisation : consultation/ordonnance non enregistrée.",
+      );
+    } finally {
+      setIsFinalizingConsultation(false);
     }
   };
 
@@ -890,13 +1320,19 @@ export default function DoctorDashboard() {
                     </div>
 
                     <div className="space-y-3">
-                      {filteredAppointments.length === 0 && (
+                      {appointmentsLoading && (
+                        <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                          Chargement des rendez-vous...
+                        </div>
+                      )}
+                      {!appointmentsLoading && filteredAppointments.length === 0 && (
                         <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
                           Aucun rendez-vous sur cette date.
                         </div>
                       )}
 
-                      {filteredAppointments.map((rdv) => (
+                      {!appointmentsLoading &&
+                        filteredAppointments.map((rdv) => (
                         <div
                           key={rdv.id}
                           className="flex flex-col gap-3 rounded-xl border border-border/60 bg-white p-4 shadow-sm transition-colors hover:border-primary/40 md:flex-row md:items-center md:justify-between"
@@ -910,9 +1346,9 @@ export default function DoctorDashboard() {
                             </p>
                             <span
                               className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                rdv.status === "termine"
+                                rdv.status === "TERMINE"
                                   ? "bg-muted text-muted-foreground"
-                                  : rdv.status === "en_cours"
+                                  : rdv.status === "PROPOSE"
                                     ? "bg-amber-100 text-amber-700"
                                     : "bg-primary/10 text-primary"
                               }`}
@@ -921,15 +1357,76 @@ export default function DoctorDashboard() {
                             </span>
                           </div>
 
-                          <Button
-                            variant="outline"
-                            className="rounded-full"
-                            onClick={() => openPatientRecord(rdv.id)}
-                          >
-                            Voir
-                          </Button>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {getStatusActions(rdv.status).map((item) => (
+                              <Button
+                                key={`${rdv.id}-${item.action}`}
+                                size="sm"
+                                variant={item.variant}
+                                disabled={appointmentActionLoadingId === rdv.id}
+                                onClick={() => {
+                                  void applyRendezVousAction(rdv.id, item.action);
+                                }}
+                              >
+                                {appointmentActionLoadingId === rdv.id
+                                  ? "Chargement..."
+                                  : item.label}
+                              </Button>
+                            ))}
+                            <Button
+                              variant="outline"
+                              className="rounded-full"
+                              disabled={appointmentActionLoadingId === rdv.id}
+                              onClick={() => {
+                                void openPatientRecord(rdv.id);
+                              }}
+                            >
+                              Voir
+                            </Button>
+                          </div>
                         </div>
                       ))}
+                      {appointmentActionError && (
+                        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                          {appointmentActionError}
+                        </div>
+                      )}
+                      {appointmentsError && (
+                        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                          {appointmentsError}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-6 border-t border-border/60 pt-4">
+                      <h3 className="text-sm font-semibold">
+                        Historique des rendez-vous effectués (3 derniers mois)
+                      </h3>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Consultations terminées récemment.
+                      </p>
+                      <div className="mt-3 space-y-2">
+                        {recentCompletedAppointments.length === 0 && (
+                          <div className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
+                            Aucun rendez-vous terminé sur cette période.
+                          </div>
+                        )}
+                        {recentCompletedAppointments.map((rdv) => (
+                          <div
+                            key={`history-${rdv.id}`}
+                            className="flex flex-col gap-1 rounded-xl border border-border/60 bg-muted/20 p-3 text-sm md:flex-row md:items-center md:justify-between"
+                          >
+                            <p className="font-medium">
+                              {formatDateFrCompact(rdv.date)} à {rdv.heure} -{" "}
+                              {rdv.patient.prenom}{" "}
+                              {rdv.patient.nom}
+                            </p>
+                            <p className="text-muted-foreground">
+                              Motif: {rdv.motif}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -949,7 +1446,7 @@ export default function DoctorDashboard() {
                       <Button
                         className="rounded-full"
                         onClick={() => openConsultation(selectedAppointment.id)}
-                        disabled={selectedAppointment.status === "termine"}
+                        disabled={selectedAppointment.status === "TERMINE"}
                       >
                         Effectuer le diagnostic
                       </Button>
@@ -960,13 +1457,24 @@ export default function DoctorDashboard() {
                         {selectedAppointment.patient.nom}
                       </CardTitle>
                       <CardDescription>
-                        Rendez-vous du {selectedAppointment.date} à{" "}
+                        Rendez-vous du{" "}
+                        {formatDateFrCompact(selectedAppointment.date)} à{" "}
                         {selectedAppointment.heure} - Motif:{" "}
                         {selectedAppointment.motif}
                       </CardDescription>
                     </div>
                   </CardHeader>
                   <CardContent>
+                    {patientDetailsLoading && (
+                      <div className="mb-4 rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                        Chargement du dossier patient...
+                      </div>
+                    )}
+                    {patientDetailsError && (
+                      <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                        {patientDetailsError}
+                      </div>
+                    )}
                     <PatientRecordView
                       patient={selectedAppointment.patient}
                       antecedentAction={
@@ -995,7 +1503,7 @@ export default function DoctorDashboard() {
                               }
                             />
                             <Input
-                              placeholder="Tension"
+                              placeholder="Tension (mmHg)"
                               value={newVital.tension}
                               onChange={(e) =>
                                 setNewVital((prev) => ({
@@ -1005,7 +1513,7 @@ export default function DoctorDashboard() {
                               }
                             />
                             <Input
-                              placeholder="Glycémie"
+                              placeholder="Glycémie (g/L)"
                               value={newVital.glycemie}
                               onChange={(e) =>
                                 setNewVital((prev) => ({
@@ -1015,7 +1523,7 @@ export default function DoctorDashboard() {
                               }
                             />
                             <Input
-                              placeholder="Poids"
+                              placeholder="Poids (kg)"
                               value={newVital.poids}
                               onChange={(e) =>
                                 setNewVital((prev) => ({
@@ -1061,7 +1569,8 @@ export default function DoctorDashboard() {
                       {selectedAppointment.patient.nom}
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      Rendez-vous du {selectedAppointment.date} à{" "}
+                      Rendez-vous du{" "}
+                      {formatDateFrCompact(selectedAppointment.date)} à{" "}
                       {selectedAppointment.heure}
                     </p>
                   </div>
@@ -1069,10 +1578,10 @@ export default function DoctorDashboard() {
                     variant="outline"
                     onClick={() => {
                       setIsDiagnosisModalOpen(false);
-                      if (selectedAppointment.status !== "termine") {
+                      if (selectedAppointment.status !== "TERMINE") {
                         markAppointmentStatus(
                           selectedAppointment.id,
-                          "confirme",
+                          "CONFIRME",
                         );
                       }
                     }}
@@ -1082,6 +1591,11 @@ export default function DoctorDashboard() {
                 </div>
 
                 <div className="px-6 py-5">
+                  {consultationFlowError && (
+                    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                      {consultationFlowError}
+                    </div>
+                  )}
                   <div className="mb-6 flex items-center gap-2">
                     <div
                       className={`h-2.5 rounded-full transition-all ${consultationStep === 1 ? "w-12 bg-primary" : "w-4 bg-primary/40"}`}
@@ -1152,143 +1666,178 @@ export default function DoctorDashboard() {
                               key={line.id}
                               className="grid gap-2 rounded-md border p-3 md:grid-cols-2"
                             >
-                              <Input
-                                placeholder="Nom médicament (DCI)"
-                                value={line.medicament}
-                                onChange={(e) =>
-                                  updatePrescriptionLine(
-                                    line.id,
-                                    "medicament",
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                              <Input
-                                placeholder="Dosage"
-                                value={line.dosage}
-                                onChange={(e) =>
-                                  updatePrescriptionLine(
-                                    line.id,
-                                    "dosage",
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                              <select
-                                className="h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
-                                value={line.forme}
-                                onChange={(e) =>
-                                  updatePrescriptionLine(
-                                    line.id,
-                                    "forme",
-                                    e.target.value,
-                                  )
-                                }
-                              >
-                                <option value="">
-                                  Choisir une forme pharmaceutique
-                                </option>
-                                {MEDICAMENT_FORMS.map((form) => (
-                                  <option key={form} value={form}>
-                                    {form}
-                                  </option>
-                                ))}
-                                <option value={AUTRE_OPTION}>Autre</option>
-                              </select>
-                              <select
-                                className="h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
-                                value={line.posologie}
-                                onChange={(e) =>
-                                  updatePrescriptionLine(
-                                    line.id,
-                                    "posologie",
-                                    e.target.value,
-                                  )
-                                }
-                              >
-                                <option value="">Choisir une posologie</option>
-                                {POSOLOGY_OPTIONS.map((option) => (
-                                  <option key={option} value={option}>
-                                    {option}
-                                  </option>
-                                ))}
-                                <option value={AUTRE_OPTION}>Autre</option>
-                              </select>
-                              {line.forme === AUTRE_OPTION && (
+                              <div className="space-y-1">
+                                <Label className="text-xs">Médicament (DCI)</Label>
                                 <Input
-                                  className="md:col-span-2"
-                                  placeholder="Autre forme pharmaceutique..."
-                                  value={line.formeAutre}
+                                  placeholder="Nom médicament (DCI)"
+                                  value={line.medicament}
                                   onChange={(e) =>
                                     updatePrescriptionLine(
                                       line.id,
-                                      "formeAutre",
+                                      "medicament",
                                       e.target.value,
                                     )
                                   }
                                 />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Dosage</Label>
+                                <Input
+                                  placeholder="Dosage"
+                                  value={line.dosage}
+                                  onChange={(e) =>
+                                    updatePrescriptionLine(
+                                      line.id,
+                                      "dosage",
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Forme pharmaceutique</Label>
+                                <select
+                                  className="h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                                  value={line.forme}
+                                  onChange={(e) =>
+                                    updatePrescriptionLine(
+                                      line.id,
+                                      "forme",
+                                      e.target.value,
+                                    )
+                                  }
+                                >
+                                  <option value="">
+                                    Choisir une forme pharmaceutique
+                                  </option>
+                                  {MEDICAMENT_FORMS.map((form) => (
+                                    <option key={form} value={form}>
+                                      {form}
+                                    </option>
+                                  ))}
+                                  <option value={AUTRE_OPTION}>Autre</option>
+                                </select>
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Posologie</Label>
+                                <select
+                                  className="h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                                  value={line.posologie}
+                                  onChange={(e) =>
+                                    updatePrescriptionLine(
+                                      line.id,
+                                      "posologie",
+                                      e.target.value,
+                                    )
+                                  }
+                                >
+                                  <option value="">Choisir une posologie</option>
+                                  {POSOLOGY_OPTIONS.map((option) => (
+                                    <option key={option} value={option}>
+                                      {option}
+                                    </option>
+                                  ))}
+                                  <option value={AUTRE_OPTION}>Autre</option>
+                                </select>
+                              </div>
+                              {line.forme === AUTRE_OPTION && (
+                                <div className="space-y-1 md:col-span-2">
+                                  <Label className="text-xs">
+                                    Autre forme pharmaceutique
+                                  </Label>
+                                  <Input
+                                    placeholder="Autre forme pharmaceutique..."
+                                    value={line.formeAutre}
+                                    onChange={(e) =>
+                                      updatePrescriptionLine(
+                                        line.id,
+                                        "formeAutre",
+                                        e.target.value,
+                                      )
+                                    }
+                                  />
+                                </div>
                               )}
                               {line.posologie === AUTRE_OPTION && (
-                                <Input
-                                  className="md:col-span-2"
-                                  placeholder="Autre posologie..."
-                                  value={line.posologieAutre}
-                                  onChange={(e) =>
-                                    updatePrescriptionLine(
-                                      line.id,
-                                      "posologieAutre",
-                                      e.target.value,
-                                    )
-                                  }
-                                />
+                                <div className="space-y-1 md:col-span-2">
+                                  <Label className="text-xs">Autre posologie</Label>
+                                  <Input
+                                    placeholder="Autre posologie..."
+                                    value={line.posologieAutre}
+                                    onChange={(e) =>
+                                      updatePrescriptionLine(
+                                        line.id,
+                                        "posologieAutre",
+                                        e.target.value,
+                                      )
+                                    }
+                                  />
+                                </div>
                               )}
-                              <Input
-                                placeholder="Durée du traitement"
-                                value={line.duree}
-                                onChange={(e) =>
-                                  updatePrescriptionLine(
-                                    line.id,
-                                    "duree",
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                              <select
-                                className="h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
-                                value={line.modeAdministration}
-                                onChange={(e) =>
-                                  updatePrescriptionLine(
-                                    line.id,
-                                    "modeAdministration",
-                                    e.target.value,
-                                  )
-                                }
-                              >
-                                <option value="">
-                                  Choisir un mode d'administration
-                                </option>
-                                {ADMINISTRATION_ROUTES.map((route) => (
-                                  <option key={route} value={route}>
-                                    {route}
-                                  </option>
-                                ))}
-                                <option value={AUTRE_OPTION}>Autre</option>
-                              </select>
-                              {line.modeAdministration === AUTRE_OPTION && (
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  Durée du traitement
+                                </Label>
                                 <Input
-                                  className="md:col-span-2"
-                                  placeholder="Autre mode d'administration..."
-                                  value={line.modeAdministrationAutre}
+                                  placeholder="Durée du traitement"
+                                  value={line.duree}
                                   onChange={(e) =>
                                     updatePrescriptionLine(
                                       line.id,
-                                      "modeAdministrationAutre",
+                                      "duree",
                                       e.target.value,
                                     )
                                   }
                                 />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">
+                                  Mode d'administration
+                                </Label>
+                                <select
+                                  className="h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                                  value={line.modeAdministration}
+                                  onChange={(e) =>
+                                    updatePrescriptionLine(
+                                      line.id,
+                                      "modeAdministration",
+                                      e.target.value,
+                                    )
+                                  }
+                                >
+                                  <option value="">
+                                    Choisir un mode d'administration
+                                  </option>
+                                  {ADMINISTRATION_ROUTES.map((route) => (
+                                    <option key={route} value={route}>
+                                      {route}
+                                    </option>
+                                  ))}
+                                  <option value={AUTRE_OPTION}>Autre</option>
+                                </select>
+                              </div>
+                              {line.modeAdministration === AUTRE_OPTION && (
+                                <div className="space-y-1 md:col-span-2">
+                                  <Label className="text-xs">
+                                    Autre mode d'administration
+                                  </Label>
+                                  <Input
+                                    placeholder="Autre mode d'administration..."
+                                    value={line.modeAdministrationAutre}
+                                    onChange={(e) =>
+                                      updatePrescriptionLine(
+                                        line.id,
+                                        "modeAdministrationAutre",
+                                        e.target.value,
+                                      )
+                                    }
+                                  />
+                                </div>
                               )}
                               <div className="md:col-span-2">
+                                <Label className="mb-1 block text-xs">
+                                  Instructions spécifiques
+                                </Label>
                                 <Input
                                   placeholder="Instructions spécifiques"
                                   value={line.instructions}
@@ -1361,9 +1910,17 @@ export default function DoctorDashboard() {
                           >
                             Retour
                           </Button>
-                          <Button onClick={generatePrescriptionPdf}>
-                            Télécharger l'ordonnance PDF
-                          </Button>
+                          <div className="flex flex-wrap gap-2">
+                            <Button variant="outline" onClick={generatePrescriptionPdf}>
+                              Générer et télécharger le PDF
+                            </Button>
+                            <Button
+                              onClick={() => setConsultationStep(3)}
+                              disabled={getValidPrescriptionLines().length === 0}
+                            >
+                              Continuer
+                            </Button>
+                          </div>
                         </CardFooter>
                       </Card>
 
@@ -1380,9 +1937,17 @@ export default function DoctorDashboard() {
                             </p>
                             <div className="mt-5 text-sm">
                               <p>Dr {displayName}</p>
+                              <p>Spécialité: {roleLabel}</p>
                               <p>N° RPPS: 00000000000</p>
-                              <p>Cabinet: Antananarivo</p>
-                              <p className="mt-2">Date: {consultationDate}</p>
+                              <p>
+                                Cabinet:{" "}
+                                {selectedAppointment.adresseCabinet ||
+                                  "Adresse non renseignée"}
+                              </p>
+                              <p>Contact: {user?.email || "Non renseigné"}</p>
+                              <p className="mt-2">
+                                Date: {formatDateFrCompact(consultationDate)}
+                              </p>
                             </div>
                             <hr className="my-4" />
                             <p className="text-sm">
@@ -1391,9 +1956,29 @@ export default function DoctorDashboard() {
                               {selectedAppointment.patient.nom}
                             </p>
                             <p className="text-sm">
-                              <span className="font-semibold">Dossier:</span>{" "}
-                              {selectedAppointment.patient.numeroDossier}
+                              <span className="font-semibold">Naissance:</span>{" "}
+                              {formatDateFrCompact(
+                                selectedAppointment.patient.dateNaissance,
+                              )}
                             </p>
+                            <p className="text-sm">
+                              <span className="font-semibold">Sexe:</span>{" "}
+                              {selectedAppointment.patient.sexe === "M"
+                                ? "Homme"
+                                : "Femme"}
+                            </p>
+                            <p className="text-sm">
+                              <span className="font-semibold">Motif:</span>{" "}
+                              {consultationMotif || selectedAppointment.motif}
+                            </p>
+                            {consultationDiagnostic && (
+                              <p className="text-sm">
+                                <span className="font-semibold">
+                                  Diagnostic / indication:
+                                </span>{" "}
+                                {consultationDiagnostic}
+                              </p>
+                            )}
                             <p className="mt-5 text-xl font-semibold">R/</p>
                             <ol className="mt-4 list-decimal space-y-3 pl-5 text-sm">
                               {prescriptionLines
@@ -1462,13 +2047,21 @@ export default function DoctorDashboard() {
                       </CardHeader>
                       <CardContent>
                         <p className="text-sm text-muted-foreground">
-                          Ordonnance générée et téléchargée. Vous pouvez
-                          terminer la consultation.
+                          Vérifiez les informations puis terminez la consultation.
+                          La consultation sera créée dans l'API et le PDF de
+                          l'ordonnance sera transmis automatiquement.
                         </p>
                       </CardContent>
                       <CardFooter className="justify-end">
-                        <Button onClick={endConsultation}>
-                          Terminer la consultation
+                        <Button
+                          onClick={() => {
+                            void endConsultation();
+                          }}
+                          disabled={isFinalizingConsultation}
+                        >
+                          {isFinalizingConsultation
+                            ? "Finalisation..."
+                            : "Terminer la consultation"}
                         </Button>
                       </CardFooter>
                     </Card>
@@ -1479,138 +2072,76 @@ export default function DoctorDashboard() {
           )}
 
           {activeView === "disponibilites" && (
-            <div className="grid gap-6 lg:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Gérer disponibilité</CardTitle>
-                  <CardDescription>
-                    Créer, modifier et supprimer des plages
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="space-y-2">
-                    <Label>Date</Label>
-                    <Input
-                      type="date"
-                      value={availabilityDraft.date}
-                      onChange={(e) =>
-                        setAvailabilityDraft((prev) => ({
-                          ...prev,
-                          date: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Début</Label>
-                      <Input
-                        type="time"
-                        value={availabilityDraft.debut}
-                        onChange={(e) =>
-                          setAvailabilityDraft((prev) => ({
-                            ...prev,
-                            debut: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Fin</Label>
-                      <Input
-                        type="time"
-                        value={availabilityDraft.fin}
-                        onChange={(e) =>
-                          setAvailabilityDraft((prev) => ({
-                            ...prev,
-                            fin: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <Button onClick={saveAvailability}>
-                    {editingAvailabilityId
-                      ? "Mettre à jour la plage"
-                      : "Créer la plage"}
-                  </Button>
-                </CardFooter>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Mes disponibilités</CardTitle>
-                  <CardDescription>Consultation et actions</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {availabilities.map((disp) => (
-                    <div
-                      key={disp.id}
-                      className="flex items-center justify-between rounded-md border p-3"
-                    >
-                      <p className="text-sm">
-                        {disp.date} - {disp.debut} a {disp.fin}
-                      </p>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => editAvailability(disp)}
-                        >
-                          Modifier
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteAvailability(disp.id)}
-                        >
-                          Supprimer
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                  {availabilities.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      Aucune disponibilité configurée.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+            <MedecinDisponibilitesPage />
           )}
 
           {activeView === "planning" && (
-            <Card className="rounded-2xl border-border/60 p-2 shadow-sm md:p-4">
-              <CalendarView
-                events={[
-                  ...appointments.map((rdv) => ({
-                    id: rdv.id,
-                    date: rdv.date,
-                    time: rdv.heure,
-                    title: `Consultation - ${rdv.patient.prenom} ${rdv.patient.nom}`,
-                    colorClass:
-                      rdv.status === "termine"
-                        ? "bg-muted/80 text-muted-foreground border-transparent"
-                        : "bg-primary text-primary-foreground border-primary/20",
-                  })),
-                  ...availabilities.map((disp) => ({
-                    id: disp.id,
-                    date: disp.date,
-                    time: `${disp.debut} - ${disp.fin}`,
-                    title: "Plage disponible",
-                    colorClass:
-                      "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-900",
-                  })),
-                ]}
-                onDateClick={(d) => {
-                  setSelectedDate(d);
-                  setIsPlanningDetailsModalOpen(true);
-                }}
-                selectedDate={selectedDate}
-              />
-            </Card>
+            <div className="space-y-6">
+              <Card className="rounded-2xl border-border/60 p-2 shadow-sm md:p-4">
+                <CalendarView
+                  events={[
+                    ...appointments.map((rdv) => ({
+                      id: rdv.id,
+                      date: rdv.date,
+                      time: rdv.heure,
+                      title: `Consultation - ${rdv.patient.prenom} ${rdv.patient.nom}`,
+                      colorClass:
+                        rdv.status === "TERMINE"
+                          ? "bg-muted/80 text-muted-foreground border-transparent"
+                          : "bg-primary text-primary-foreground border-primary/20",
+                    })),
+                    ...availabilities.map((disp) => ({
+                      id: disp.id,
+                      date: disp.date,
+                      time: `${disp.debut} - ${disp.fin}`,
+                      title: "Plage disponible",
+                      colorClass:
+                        "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-900",
+                    })),
+                  ]}
+                  onDateClick={(d) => {
+                    setSelectedDate(d);
+                    setIsPlanningDetailsModalOpen(true);
+                  }}
+                  selectedDate={selectedDate}
+                />
+              </Card>
+
+              <Card className="rounded-2xl border-border/60 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Rendez-vous à venir</CardTitle>
+                  <CardDescription>
+                    Liste de vos prochaines consultations planifiées.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {upcomingAppointments.length === 0 && (
+                    <div className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
+                      Aucun rendez-vous à venir.
+                    </div>
+                  )}
+
+                  {upcomingAppointments.map((rdv) => (
+                    <div
+                      key={`upcoming-${rdv.id}`}
+                      className="flex flex-col gap-2 rounded-xl border border-border/60 bg-white p-4 md:flex-row md:items-center md:justify-between"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold">
+                          {formatDateFrCompact(rdv.date)} à {rdv.heure}
+                        </p>
+                        <p className="text-sm">
+                          {rdv.patient.prenom} {rdv.patient.nom}
+                        </p>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Motif: {rdv.motif}
+                      </p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {isPlanningDetailsModalOpen && (
@@ -1618,7 +2149,9 @@ export default function DoctorDashboard() {
               <div className="w-full max-w-2xl rounded-2xl border bg-background shadow-xl">
                 <div className="flex items-center justify-between border-b px-6 py-4">
                   <div>
-                    <h3 className="text-xl font-semibold">Détails du {selectedDate}</h3>
+                    <h3 className="text-xl font-semibold">
+                      Détails du {formatDateFrCompact(selectedDate)}
+                    </h3>
                     <p className="text-sm text-muted-foreground">
                       Vos rendez-vous et disponibilités prévus
                     </p>
@@ -1672,16 +2205,13 @@ export default function DoctorDashboard() {
                         <div className="flex items-center justify-between">
                           <span className="font-semibold">{rdv.heure}</span>
                           <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${rdv.status === "termine" ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary"}`}
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${rdv.status === "TERMINE" ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary"}`}
                           >
                             {rdv.status}
                           </span>
                         </div>
                         <p className="mt-1 font-medium">
                           {rdv.patient.prenom} {rdv.patient.nom}
-                        </p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Motif: {rdv.motif}
                         </p>
                       </div>
                     ))}
@@ -1725,6 +2255,44 @@ export default function DoctorDashboard() {
                         </div>
                       ))}
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {proposerModalRdvId && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="w-full max-w-md rounded-2xl border bg-background shadow-xl">
+                <div className="border-b px-6 py-4">
+                  <h3 className="text-lg font-semibold">Proposer un nouveau créneau</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Renseignez la nouvelle date et heure du rendez-vous.
+                  </p>
+                </div>
+                <div className="space-y-3 px-6 py-4">
+                  <Label htmlFor="proposer-date-heure">Nouvelle date et heure</Label>
+                  <Input
+                    id="proposer-date-heure"
+                    type="datetime-local"
+                    value={proposerDateHeure}
+                    onChange={(e) => setProposerDateHeure(e.target.value)}
+                    disabled={isSubmittingProposer}
+                  />
+                </div>
+                <div className="flex justify-end gap-2 border-t px-6 py-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setProposerModalRdvId(null);
+                      setProposerDateHeure("");
+                    }}
+                    disabled={isSubmittingProposer}
+                  >
+                    Annuler
+                  </Button>
+                  <Button onClick={() => void submitProposerCreneau()} disabled={isSubmittingProposer}>
+                    {isSubmittingProposer ? "Envoi..." : "Valider la proposition"}
+                  </Button>
                 </div>
               </div>
             </div>
