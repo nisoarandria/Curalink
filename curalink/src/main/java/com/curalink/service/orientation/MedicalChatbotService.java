@@ -3,6 +3,8 @@ package com.curalink.service.orientation;
 import com.curalink.config.GeminiProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -10,6 +12,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -19,12 +23,16 @@ import java.util.Map;
 
 import static org.springframework.http.HttpStatus.BAD_GATEWAY;
 import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
+import static org.springframework.http.HttpStatus.TOO_MANY_REQUESTS;
 
 @Service
 public class MedicalChatbotService {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(MedicalChatbotService.class);
 	private static final String OFF_TOPIC_RESPONSE =
 			"Je suis un chatbot medical. Je reponds uniquement aux questions liees aux symptomes et a l'orientation de sante.";
+	private static final String TEMPORARY_UNAVAILABLE_RESPONSE =
+			"Le chatbot medical est momentanement indisponible. Veuillez reessayer dans quelques instants.";
 
 	private final GeminiProperties geminiProperties;
 	private final RestTemplate restTemplate;
@@ -78,7 +86,18 @@ public class MedicalChatbotService {
 					HttpMethod.POST,
 					entity,
 					String.class);
+		} catch (HttpStatusCodeException e) {
+			LOGGER.warn("Erreur HTTP Gemini: status={}, body={}", e.getStatusCode(), sanitize(e.getResponseBodyAsString()));
+			if (e.getStatusCode() == TOO_MANY_REQUESTS) {
+				return toHtml(TEMPORARY_UNAVAILABLE_RESPONSE);
+			}
+			String reason = "Echec d'appel au chatbot medical IA (%s)".formatted(e.getStatusCode());
+			throw new ResponseStatusException(BAD_GATEWAY, reason);
+		} catch (ResourceAccessException e) {
+			LOGGER.warn("Erreur reseau Gemini: {}", e.getMessage());
+			return toHtml(TEMPORARY_UNAVAILABLE_RESPONSE);
 		} catch (Exception e) {
+			LOGGER.error("Erreur inattendue lors de l'appel Gemini", e);
 			throw new ResponseStatusException(BAD_GATEWAY, "Echec d'appel au chatbot medical IA");
 		}
 
@@ -112,5 +131,13 @@ public class MedicalChatbotService {
 				.replace(">", "&gt;")
 				.replace("\"", "&quot;")
 				.replace("'", "&#39;");
+	}
+
+	private static String sanitize(String body) {
+		if (body == null || body.isBlank()) {
+			return "";
+		}
+		String compact = body.replaceAll("\\s+", " ").trim();
+		return compact.length() > 300 ? compact.substring(0, 300) + "..." : compact;
 	}
 }
