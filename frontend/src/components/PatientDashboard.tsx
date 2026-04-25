@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,6 +19,7 @@ import {
   annulerRendezVous,
   confirmerRendezVous,
   refuserRendezVous,
+  sendChatMessage,
   type ServiceOption,
   type MedecinOption,
   type MedecinDisponibilite,
@@ -29,6 +30,13 @@ import {
 
 type Step = 1 | 2 | 3
 type Parcours = "medecin" | "creneau" | null
+
+type ChatMessage = {
+  id: string
+  role: "user" | "assistant"
+  content: string
+  timestamp: Date
+}
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -88,8 +96,19 @@ export default function PatientDashboard() {
   const { logout } = useAuth()
   const [activeTab, setActiveTab] = useState<"rdv" | "chatbot" | "dossier" | "planning" | "ordonnances">("rdv")
   const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const [symptoms, setSymptoms] = useState("")
-  const [aiAnswer, setAiAnswer] = useState("")
+
+  // ── Chat IA state ──────────────────────────────────────────────────
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    {
+      id: "welcome",
+      role: "assistant",
+      content: "<p>Bonjour ! Je suis votre assistant médical IA. Décrivez vos symptômes ou posez-moi une question sur votre santé, et je vous donnerai des conseils d'orientation.</p>",
+      timestamp: new Date(),
+    },
+  ])
+  const [chatInput, setChatInput] = useState("")
+  const [chatLoading, setChatLoading] = useState(false)
+  const chatEndRef = useRef<HTMLDivElement>(null)
 
   // ── RDV wizard state ───────────────────────────────────────────────
   const [step, setStep] = useState<Step>(1)
@@ -290,11 +309,52 @@ export default function PatientDashboard() {
     setSuccessMessage("")
   }
 
-  const submitAi = () => {
-    if (!symptoms.trim()) return
-    setAiAnswer(
-      "Recommandation IA: une consultation de Médecine générale est conseillée. Vous pouvez prendre rendez-vous ci-dessous."
-    )
+  // ── Auto-scroll du chat ──────────────────────────────────────────────
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [chatMessages, chatLoading])
+
+  const handleSendChat = async () => {
+    const text = chatInput.trim()
+    if (!text || chatLoading) return
+
+    const userMsg: ChatMessage = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: text,
+      timestamp: new Date(),
+    }
+    setChatMessages((prev) => [...prev, userMsg])
+    setChatInput("")
+    setChatLoading(true)
+
+    try {
+      const html = await sendChatMessage(text)
+      const aiMsg: ChatMessage = {
+        id: `ai-${Date.now()}`,
+        role: "assistant",
+        content: html,
+        timestamp: new Date(),
+      }
+      setChatMessages((prev) => [...prev, aiMsg])
+    } catch {
+      const errMsg: ChatMessage = {
+        id: `err-${Date.now()}`,
+        role: "assistant",
+        content: "<p>Désolé, une erreur est survenue. Veuillez réessayer.</p>",
+        timestamp: new Date(),
+      }
+      setChatMessages((prev) => [...prev, errMsg])
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
+  const handleChatKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleSendChat()
+    }
   }
 
   const handleLogout = async () => {
@@ -642,28 +702,88 @@ export default function PatientDashboard() {
         )}
 
         {activeTab === "chatbot" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Chatbot IA</CardTitle>
-              <CardDescription>Saisir les symptômes puis générer une recommandation de service.</CardDescription>
+          <Card className="flex flex-col" style={{ height: "calc(100vh - 220px)" }}>
+            <CardHeader className="shrink-0 border-b">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+                </div>
+                <div>
+                  <CardTitle>Assistant Médical IA</CardTitle>
+                  <CardDescription>Posez vos questions de santé en temps réel</CardDescription>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <textarea
-                className="min-h-28 w-full rounded-md border bg-background px-3 py-2 text-sm"
-                value={symptoms}
-                onChange={(e) => setSymptoms(e.target.value)}
-                placeholder="Décrivez vos symptômes..."
-              />
-              <Button onClick={submitAi}>Envoyer</Button>
-              {aiAnswer && (
-                <Card>
-                  <CardContent className="space-y-3 pt-6">
-                    <p className="text-sm">{aiAnswer}</p>
-                    <Button onClick={() => setActiveTab("rdv")}>Prendre rendez-vous</Button>
-                  </CardContent>
-                </Card>
+
+            {/* Zone de messages */}
+            <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
+              {chatMessages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
+                      msg.role === "user"
+                        ? "bg-primary text-primary-foreground rounded-br-md"
+                        : "bg-muted rounded-bl-md"
+                    }`}
+                  >
+                    {msg.role === "user" ? (
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    ) : (
+                      <div
+                        className="prose prose-sm max-w-none [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5"
+                        dangerouslySetInnerHTML={{ __html: msg.content }}
+                      />
+                    )}
+                    <p className={`mt-1 text-[10px] ${msg.role === "user" ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+                      {msg.timestamp.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  </div>
+                </div>
+              ))}
+
+              {/* Indicateur de chargement */}
+              {chatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-muted rounded-2xl rounded-bl-md px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/40 [animation-delay:-0.3s]" />
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/40 [animation-delay:-0.15s]" />
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/40" />
+                    </div>
+                  </div>
+                </div>
               )}
+              <div ref={chatEndRef} />
             </CardContent>
+
+            {/* Zone de saisie */}
+            <CardFooter className="shrink-0 border-t p-4">
+              <div className="flex w-full gap-2">
+                <textarea
+                  className="min-h-[44px] max-h-32 flex-1 resize-none rounded-xl border bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={handleChatKeyDown}
+                  placeholder="Décrivez vos symptômes ou posez une question..."
+                  rows={1}
+                  disabled={chatLoading}
+                />
+                <Button
+                  onClick={handleSendChat}
+                  disabled={chatLoading || !chatInput.trim()}
+                  size="icon"
+                  className="h-11 w-11 shrink-0 rounded-xl"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>
+                </Button>
+              </div>
+              <p className="mt-2 w-full text-center text-[11px] text-muted-foreground">
+                Appuyez sur Entrée pour envoyer, Maj+Entrée pour un retour à la ligne
+              </p>
+            </CardFooter>
           </Card>
         )}
 
