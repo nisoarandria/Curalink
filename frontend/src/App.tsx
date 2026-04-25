@@ -1,9 +1,11 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import LoginForm from "./pages/auth/LoginForm";
 import DoctorDashboard from "./components/DoctorDashboard";
+import AdminDashboard from "./components/AdminDashboard";
 import PublicHomePage from "./components/PublicHomePage";
 import PatientDashboard from "./components/PatientDashboard";
 import NutritionistDashboard from "./components/NutritionistDashboard";
+import ArticleEditorPage from "./pages/nutritionniste/ArticleEditorPage";
 import PathologyPage from "./components/PathologyPage.tsx";
 import ArticlePage from "./components/ArticlePage.tsx";
 import RegisterPatientPage from "./components/RegisterPatientPage.tsx";
@@ -21,11 +23,18 @@ export default function App() {
         <Route element={<ProtectedRoute allowedRoles={["MEDECIN"]} />}>
           <Route path="/medecin" element={<DoctorDashboard />} />
         </Route>
+        <Route element={<ProtectedRoute allowedRoles={["ADMIN"]} />}>
+          <Route path="/admin" element={<AdminDashboard />} />
+        </Route>
         <Route element={<ProtectedRoute allowedRoles={["PATIENT"]} />}>
           <Route path="/patient" element={<PatientDashboard />} />
         </Route>
         <Route element={<ProtectedRoute allowedRoles={["NUTRITIONNISTE"]} />}>
           <Route path="/nutritionniste" element={<NutritionistDashboard />} />
+          <Route
+            path="/nutritionniste/articles/:id"
+            element={<ArticleEditorPage />}
+          />
         </Route>
         <Route path="/nutrition/:pathology" element={<PathologyPage />} />
         <Route path="/nutrition/article/:articleId" element={<ArticlePage />} />

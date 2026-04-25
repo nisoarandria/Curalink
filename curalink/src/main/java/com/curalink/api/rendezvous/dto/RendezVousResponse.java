@@ -13,6 +13,9 @@ public record RendezVousResponse(
 		long patientId,
 		String patientNomComplet,
 		long medecinId,
-		String medecinNomComplet
+		String medecinNomComplet,
+		String specialite,
+		String adresseCabinet,
+		String numeroInscription
 ) {
 }

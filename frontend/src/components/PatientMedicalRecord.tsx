@@ -3,6 +3,30 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 
+const formatDateFrCompact = (value: string) => {
+  if (!value || value === "-") return value || "-"
+  const [year, month, day] = value.split("-")
+  if (!year || !month || !day) return value
+  const monthIndex = Number(month) - 1
+  const months = [
+    "Janvier",
+    "Fevrier",
+    "Mars",
+    "Avril",
+    "Mai",
+    "Juin",
+    "Juillet",
+    "Aout",
+    "Septembre",
+    "Octobre",
+    "Novembre",
+    "Decembre",
+  ]
+  const monthLabel = months[monthIndex]
+  if (!monthLabel) return value
+  return `${day} ${monthLabel} ${year}`
+}
+
 export type VitalSign = {
   id?: string
   date: string
@@ -19,6 +43,7 @@ export type MedicalHistory = {
 
 export type ConsultationNote = {
   id?: string
+  rendezVousId?: string
   date: string
   motif: string
   diagnostic: string
@@ -167,7 +192,7 @@ export function PatientRecordView({
                 <span>•</span>
                 <span>{patient.sexe === "M" ? "Homme" : "Femme"}</span>
                 <span>•</span>
-                <span>Né(e) le {patient.dateNaissance}</span>
+                <span>Né(e) le {formatDateFrCompact(patient.dateNaissance)}</span>
               </div>
             </div>
             <div className="rounded-full bg-primary/10 p-3 text-primary">
@@ -240,10 +265,10 @@ export function PatientRecordView({
               item.poids.includes(search)
             }
             columns={[
-              { header: "Date", render: (item) => item.date },
-              { header: "Tension", render: (item) => <span className="font-semibold text-blue-600 dark:text-blue-400">{item.tension}</span> },
-              { header: "Glycémie", render: (item) => `${item.glycemie} g/L` },
-              { header: "Poids", render: (item) => `${item.poids} kg` },
+              { header: "Date", render: (item) => formatDateFrCompact(item.date) },
+              { header: "Tension (mmHg)", render: (item) => <span className="font-semibold text-blue-600 dark:text-blue-400">{item.tension}</span> },
+              { header: "Glycémie (g/L)", render: (item) => `${item.glycemie} g/L` },
+              { header: "Poids (kg)", render: (item) => `${item.poids} kg` },
               { header: "IMC", render: (item) => (
                 <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${Number(item.imc) > 25 ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'}`}>
                   {item.imc}
@@ -274,7 +299,7 @@ export function PatientRecordView({
                      item.diagnostic.toLowerCase().includes(term)
             }}
             columns={[
-              { header: "Date", render: (item) => <span className="whitespace-nowrap">{item.date}</span> },
+              { header: "Date", render: (item) => <span className="whitespace-nowrap">{formatDateFrCompact(item.date)}</span> },
               { header: "Motif", render: (item) => <span className="font-medium">{item.motif}</span> },
               { header: "Diagnostic", render: (item) => <span className="text-muted-foreground">{item.diagnostic}</span> },
             ]}

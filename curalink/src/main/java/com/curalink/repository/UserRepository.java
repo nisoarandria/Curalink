@@ -58,4 +58,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
 					""",
 			nativeQuery = true)
 	Page<User> searchStaff(@Param("q") String q, @Param("userType") String userType, Pageable pageable);
+
+	@Query(value = """
+			SELECT count(*)
+			FROM users u
+			WHERE u.user_type IN ('MEDECIN', 'NUTRITIONNISTE')
+			""", nativeQuery = true)
+	long countMedicalStaff();
 }

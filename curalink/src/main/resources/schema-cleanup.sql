@@ -1,0 +1,2 @@
+ALTER TABLE IF EXISTS ordonnance
+DROP COLUMN IF EXISTS prescription;

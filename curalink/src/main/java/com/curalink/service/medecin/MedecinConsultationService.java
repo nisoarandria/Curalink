@@ -6,7 +6,6 @@ import com.curalink.api.medecin.dto.ConsultationResponse;
 import com.curalink.api.medecin.dto.CreateAntecedentRequest;
 import com.curalink.api.medecin.dto.CreateConstanteVitaleRequest;
 import com.curalink.api.medecin.dto.CreateConsultationRequest;
-import com.curalink.api.medecin.dto.CreateOrdonnanceRequest;
 import com.curalink.api.medecin.dto.OrdonnanceResponse;
 import com.curalink.model.consultation.AntecedentMedical;
 import com.curalink.model.consultation.Consultation;
@@ -20,15 +19,17 @@ import com.curalink.repository.AntecedentMedicalRepository;
 import com.curalink.repository.ConsultationRepository;
 import com.curalink.repository.ConstanteVitaleRepository;
 import com.curalink.repository.OrdonnanceRepository;
+import com.curalink.repository.PatientRepository;
 import com.curalink.repository.RendezVousRepository;
 import com.curalink.repository.UserRepository;
 import com.curalink.security.AuthenticatedUser;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.nio.charset.StandardCharsets;
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -41,6 +42,7 @@ public class MedecinConsultationService {
 	private final OrdonnanceRepository ordonnanceRepository;
 	private final RendezVousRepository rendezVousRepository;
 	private final UserRepository userRepository;
+	private final PatientRepository patientRepository;
 
 	public MedecinConsultationService(
 			ConsultationRepository consultationRepository,
@@ -48,13 +50,15 @@ public class MedecinConsultationService {
 			AntecedentMedicalRepository antecedentMedicalRepository,
 			OrdonnanceRepository ordonnanceRepository,
 			RendezVousRepository rendezVousRepository,
-			UserRepository userRepository) {
+			UserRepository userRepository,
+			PatientRepository patientRepository) {
 		this.consultationRepository = consultationRepository;
 		this.constanteVitaleRepository = constanteVitaleRepository;
 		this.antecedentMedicalRepository = antecedentMedicalRepository;
 		this.ordonnanceRepository = ordonnanceRepository;
 		this.rendezVousRepository = rendezVousRepository;
 		this.userRepository = userRepository;
+		this.patientRepository = patientRepository;
 	}
 
 	@Transactional
@@ -81,17 +85,15 @@ public class MedecinConsultationService {
 	}
 
 	@Transactional
-	public ConstanteVitaleResponse addConstante(
+	public ConstanteVitaleResponse addConstanteForPatient(
 			AuthenticatedUser currentUser,
-			long consultationId,
+			long patientId,
 			CreateConstanteVitaleRequest request) {
-		Consultation consultation = consultationRepository.findById(consultationId)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Consultation introuvable"));
-		assertOwnerMedecin(currentUser, consultation.getMedecin().getId());
-
+		Medecin medecin = requireCurrentMedecin(currentUser);
+		assertPatientLinkedToMedecin(medecin.getId(), patientId);
+		Patient patient = requirePatient(patientId);
 		ConstanteVitale saved = constanteVitaleRepository.save(new ConstanteVitale(
-				consultation,
-				consultation.getPatient(),
+				patient,
 				request.date(),
 				request.glycemie(),
 				request.tension(),
@@ -99,7 +101,6 @@ public class MedecinConsultationService {
 				request.imc()));
 		return new ConstanteVitaleResponse(
 				saved.getId(),
-				consultation.getId(),
 				saved.getPatient().getId(),
 				saved.getDate(),
 				saved.getGlycemie(),
@@ -110,7 +111,8 @@ public class MedecinConsultationService {
 
 	@Transactional(readOnly = true)
 	public List<AntecedentResponse> listAntecedents(AuthenticatedUser currentUser, long patientId) {
-		requireCurrentMedecin(currentUser);
+		Medecin medecin = requireCurrentMedecin(currentUser);
+		assertPatientLinkedToMedecin(medecin.getId(), patientId);
 		return antecedentMedicalRepository.findByPatientIdOrderByCreatedAtDesc(patientId).stream()
 				.map(a -> new AntecedentResponse(a.getId(), a.getPatient().getId(), a.getDescription(), a.getCreatedAt()))
 				.toList();
@@ -118,7 +120,8 @@ public class MedecinConsultationService {
 
 	@Transactional
 	public AntecedentResponse addAntecedent(AuthenticatedUser currentUser, long patientId, CreateAntecedentRequest request) {
-		requireCurrentMedecin(currentUser);
+		Medecin medecin = requireCurrentMedecin(currentUser);
+		assertPatientLinkedToMedecin(medecin.getId(), patientId);
 		Patient patient = requirePatient(patientId);
 		AntecedentMedical saved = antecedentMedicalRepository.save(new AntecedentMedical(
 				patient,
@@ -131,7 +134,7 @@ public class MedecinConsultationService {
 	public OrdonnanceResponse createOrdonnance(
 			AuthenticatedUser currentUser,
 			long consultationId,
-			CreateOrdonnanceRequest request) {
+			MultipartFile pdfContent) {
 		Consultation consultation = consultationRepository.findById(consultationId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Consultation introuvable"));
 		assertOwnerMedecin(currentUser, consultation.getMedecin().getId());
@@ -139,20 +142,50 @@ public class MedecinConsultationService {
 		ordonnanceRepository.findByConsultationId(consultationId).ifPresent(existing -> {
 			throw new ResponseStatusException(HttpStatus.CONFLICT, "Une ordonnance existe deja pour cette consultation");
 		});
-
-		byte[] pdfBytes = generateSimplePdf(request.prescription().trim());
+		validatePdfFile(pdfContent);
+		byte[] pdfBytes;
+		try {
+			pdfBytes = pdfContent.getBytes();
+		} catch (IOException e) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lecture du fichier PDF impossible");
+		}
 		Ordonnance saved = ordonnanceRepository.save(new Ordonnance(
 				consultation,
-				request.prescription().trim(),
 				pdfBytes,
 				LocalDateTime.now()));
 
 		return new OrdonnanceResponse(
 				saved.getId(),
 				consultationId,
-				saved.getPrescription(),
 				saved.getCreatedAt(),
-				"Ordonnance PDF generee et enregistree");
+				"Ordonnance PDF recue et enregistree");
+	}
+
+	@Transactional(readOnly = true)
+	public List<ConstanteVitaleResponse> listConstantesByPatient(AuthenticatedUser currentUser, long patientId) {
+		Medecin medecin = requireCurrentMedecin(currentUser);
+		assertPatientLinkedToMedecin(medecin.getId(), patientId);
+		return constanteVitaleRepository.findByPatientIdOrderByDateDescIdDesc(patientId)
+				.stream()
+				.map(c -> new ConstanteVitaleResponse(
+						c.getId(),
+						c.getPatient().getId(),
+						c.getDate(),
+						c.getGlycemie(),
+						c.getTension(),
+						c.getPoids(),
+						c.getImc()))
+				.toList();
+	}
+
+	@Transactional(readOnly = true)
+	public List<ConsultationResponse> listConsultationsByPatient(AuthenticatedUser currentUser, long patientId) {
+		Medecin medecin = requireCurrentMedecin(currentUser);
+		assertPatientLinkedToMedecin(medecin.getId(), patientId);
+		return consultationRepository.findByPatientIdAndMedecinIdOrderByDateDescIdDesc(patientId, medecin.getId())
+				.stream()
+				.map(MedecinConsultationService::toResponse)
+				.toList();
 	}
 
 	private Medecin requireCurrentMedecin(AuthenticatedUser currentUser) {
@@ -180,6 +213,15 @@ public class MedecinConsultationService {
 		return patient;
 	}
 
+	private void assertPatientLinkedToMedecin(long medecinId, long patientId) {
+		if (!patientRepository.existsById(patientId)) {
+			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Patient introuvable");
+		}
+		if (!patientRepository.existsLinkedToMedecin(patientId, medecinId)) {
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Ce patient n'est pas rattache au medecin connecte");
+		}
+	}
+
 	private static ConsultationResponse toResponse(Consultation c) {
 		return new ConsultationResponse(
 				c.getId(),
@@ -191,19 +233,13 @@ public class MedecinConsultationService {
 				c.getDate());
 	}
 
-	/**
-	 * PDF minimal ASCII pour stockage binaire (placeholder simple).
-	 */
-	private static byte[] generateSimplePdf(String prescription) {
-		String escaped = prescription.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)");
-		String pdf = "%PDF-1.4\n"
-				+ "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
-				+ "2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n"
-				+ "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n"
-				+ "4 0 obj<</Length 75>>stream\nBT /F1 12 Tf 50 780 Td (Ordonnance) Tj 0 -20 Td (" + escaped + ") Tj ET\nendstream endobj\n"
-				+ "5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n"
-				+ "xref\n0 6\n0000000000 65535 f \n"
-				+ "trailer<</Root 1 0 R/Size 6>>\nstartxref\n0\n%%EOF";
-		return pdf.getBytes(StandardCharsets.US_ASCII);
+	private static void validatePdfFile(MultipartFile pdfContent) {
+		if (pdfContent == null || pdfContent.isEmpty()) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le fichier PDF de l'ordonnance est requis");
+		}
+		String contentType = pdfContent.getContentType();
+		if (contentType != null && !"application/pdf".equalsIgnoreCase(contentType)) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le fichier doit être un PDF");
+		}
 	}
 }

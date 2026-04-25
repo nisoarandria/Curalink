@@ -1,79 +1,150 @@
-import { Link, useParams } from "react-router-dom"
+import { useEffect, useMemo, useState } from "react"
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { publicApiClient } from "@/services/axiosInstance"
 
-// Mock data pour les pathologies
-const pathologiesData: Record<string, { title: string, description: string }> = {
-  "diabete": {
-    title: "Diabète",
-    description: "Le diabète est une maladie chronique qui se déclare lorsque le pancréas ne produit pas suffisamment d'insuline, ou lorsque l'organisme n'est pas capable d'utiliser efficacement l'insuline qu'il produit. Une alimentation adaptée est primordiale pour maintenir une glycémie stable."
-  },
-  "hypertension": {
-    title: "Hypertension",
-    description: "L'hypertension artérielle se caractérise par une pression anormalement forte du sang sur la paroi des artères. Réduire la consommation de sel et adopter un régime riche en fruits et légumes est essentiel."
-  },
-  "cancer": {
-    title: "Cancer",
-    description: "La nutrition joue un rôle de soutien important pendant et après les traitements contre le cancer, aidant à maintenir l'énergie et la masse musculaire."
-  },
-  "osteoporose": {
-    title: "Ostéoporose",
-    description: "Une maladie caractérisée par une fragilité excessive du squelette, due à une diminution de la masse osseuse. Le calcium et la vitamine D sont vos meilleurs alliés."
-  },
-  "anemie": {
-    title: "Anémie",
-    description: "L'anémie est souvent liée à une carence en fer, vitamine B12 ou B9. L'alimentation peut corriger ou prévenir ces carences."
-  },
-  "obesite": {
-    title: "Obésité",
-    description: "L'obésité est une accumulation anormale ou excessive de graisse corporelle qui peut nuire à la santé. Une prise en charge nutritionnelle globale est recommandée."
-  },
-  "grossesse": {
-    title: "Grossesse",
-    description: "La grossesse est une période nécessitant des besoins nutritionnels accrus pour assurer le bon développement du fœtus et la santé de la mère."
+type ApiArticleItem = {
+  id: number
+  titre: string
+  contenu: string
+  datePublication: string
+  couvertureUrl?: string | null
+  rubrique?: {
+    id: number
+    titre: string
+    pathologie: string
+    description?: string
   }
 }
 
-// Mock data pour les articles
-const mockArticles = [
-  {
-    id: "art-1",
-    pathologySlug: "diabete",
-    title: "Les glucides : bons ou mauvais pour le diabète ?",
-    readTime: "5 min",
-    date: "2026-04-18"
-  },
-  {
-    id: "art-2",
-    pathologySlug: "diabete",
-    title: "Idées de petits-déjeuners à faible indice glycémique",
-    readTime: "3 min",
-    date: "2026-04-10"
-  },
-  {
-    id: "art-3",
-    pathologySlug: "hypertension",
-    title: "Le régime DASH expliqué simplement",
-    readTime: "6 min",
-    date: "2026-04-05"
-  },
-  {
-    id: "art-4",
-    pathologySlug: "obesite",
-    title: "Comprendre le métabolisme basal",
-    readTime: "4 min",
-    date: "2026-03-22"
-  }
-]
+type PageResponse<T> = {
+  description?: string
+  content: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
+const PATHOLOGY_ALIASES: Record<string, string> = {
+  diabete: "DIABETE",
+  hypertension: "HYPERTENSION",
+  cancer: "CANCER",
+  acancer: "CANCER",
+  osteoporose: "OSTEOPOROSE",
+  anemie: "ANEMIE",
+  obesite: "OBESITE",
+  grossesse: "GROSSESSE",
+}
+
+const PAGE_SIZE = 10
+
+function normalizePathologyParam(value: string): string {
+  const cleaned = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z]/g, "")
+  return PATHOLOGY_ALIASES[cleaned] ?? value.toUpperCase()
+}
+
+function stripHtml(html: string): string {
+  const doc = new DOMParser().parseFromString(html ?? "", "text/html")
+  return (doc.body.textContent ?? "").replace(/\s+/g, " ").trim()
+}
+
+function estimateReadMinutes(html: string): number {
+  const words = stripHtml(html).split(/\s+/).filter(Boolean).length
+  return Math.max(1, Math.ceil(words / 200))
+}
+
+function formatDate(value: string): string {
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value?.slice(0, 10) ?? ""
+  return d.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
+}
 
 export default function PathologyPage() {
   const { pathology } = useParams<{ pathology: string }>()
-  
-  const currentPathology = pathology && pathologiesData[pathology] 
-    ? pathologiesData[pathology] 
-    : { title: "Pathologie inconnue", description: "Cette pathologie n'a pas encore de description." }
+  const navigate = useNavigate()
+  const location = useLocation()
+  const normalizedPathology = useMemo(
+    () => normalizePathologyParam(pathology ?? ""),
+    [pathology],
+  )
 
-  const relatedArticles = mockArticles.filter(art => art.pathologySlug === pathology)
+  const [articles, setArticles] = useState<ApiArticleItem[]>([])
+  const [page, setPage] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
+  const [apiDescription, setApiDescription] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setPage(0)
+  }, [normalizedPathology])
+
+  useEffect(() => {
+    if (!normalizedPathology) return
+    const fetchByPathology = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const { data } = await publicApiClient.get<PageResponse<ApiArticleItem>>(
+          "/nutrition/articles",
+          {
+            params: {
+              page,
+              size: PAGE_SIZE,
+              pathologie: normalizedPathology,
+            },
+          },
+        )
+        setArticles(data?.content ?? [])
+        setTotalPages(data?.totalPages ?? 0)
+        setTotalElements(data?.totalElements ?? 0)
+        setApiDescription(data?.description ?? "")
+      } catch {
+        setArticles([])
+        setTotalPages(0)
+        setTotalElements(0)
+        setApiDescription("")
+        setError("Impossible de charger les articles pour cette pathologie.")
+      } finally {
+        setLoading(false)
+      }
+    }
+    void fetchByPathology()
+  }, [normalizedPathology, page])
+
+  const pathologyTitle =
+    articles[0]?.rubrique?.titre ??
+    (normalizedPathology ? normalizedPathology.charAt(0) + normalizedPathology.slice(1).toLowerCase() : "Pathologie")
+  const pathologyDescription =
+    apiDescription ||
+    articles[0]?.rubrique?.description ||
+    "Aucune description disponible pour cette pathologie."
+  const fromPath = (location.state as { from?: string } | null)?.from
+
+  const handleBack = () => {
+    if (fromPath) {
+      navigate(fromPath)
+      return
+    }
+
+    if (window.history.length > 1) {
+      navigate(-1)
+      return
+    }
+
+    navigate("/nutritionniste")
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background font-sans text-foreground">
@@ -94,45 +165,95 @@ export default function PathologyPage() {
 
       <main className="mx-auto w-full max-w-4xl flex-1 space-y-10 p-4 md:p-8">
         <div className="space-y-4">
-          <Link to="/" className="inline-flex items-center text-sm font-medium text-primary hover:underline">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="inline-flex items-center text-sm font-medium text-primary hover:underline"
+          >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1"><path d="m15 18-6-6 6-6"/></svg>
             Retour
-          </Link>
+          </button>
           <h1 className="text-4xl font-extrabold tracking-tight lg:text-5xl">
-            {currentPathology.title}
+            {pathologyTitle}
           </h1>
           <p className="text-lg leading-relaxed text-muted-foreground">
-            {currentPathology.description}
+            {pathologyDescription}
           </p>
         </div>
 
         <section className="space-y-6">
           <h2 className="text-2xl font-bold tracking-tight">Articles récents sur ce sujet</h2>
-          
-          {relatedArticles.length === 0 ? (
+          {error && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+              {error}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="rounded-xl border border-border/60 bg-card p-8 text-center text-sm font-medium text-muted-foreground">
+              Chargement des articles...
+            </div>
+          ) : articles.length === 0 ? (
             <p className="text-muted-foreground">Aucun article publié pour le moment dans cette rubrique.</p>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
-              {relatedArticles.map((article) => (
-                <Link to={`/nutrition/article/${article.id}`} key={article.id}>
+              {articles.map((article) => (
+                <Link
+                  to={`/nutrition/article/${article.id}`}
+                  key={article.id}
+                  state={{ from: location.pathname + location.search }}
+                >
                   <Card className="h-full transition-shadow hover:shadow-md hover:border-primary/50">
                     <CardHeader>
-                      <CardTitle className="text-xl">{article.title}</CardTitle>
+                      <CardTitle className="text-xl">{article.titre}</CardTitle>
                       <CardDescription className="flex items-center gap-2 pt-2 text-xs">
                         <span className="flex items-center gap-1">
                           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                          {article.readTime}
+                          {estimateReadMinutes(article.contenu)} min
                         </span>
                         <span>•</span>
                         <span className="flex items-center gap-1">
                           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
-                          {article.date}
+                          {formatDate(article.datePublication)}
                         </span>
                       </CardDescription>
                     </CardHeader>
                   </Card>
                 </Link>
               ))}
+            </div>
+          )}
+
+          {totalPages > 1 && (
+            <div className="flex flex-col items-center justify-between gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 sm:flex-row sm:px-6">
+              <p className="text-xs font-semibold text-muted-foreground">
+                {totalElements} article{totalElements > 1 ? "s" : ""} · {PAGE_SIZE} par page
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  disabled={page <= 0 || loading}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                >
+                  Précédent
+                </Button>
+                <span className="min-w-28 text-center text-xs font-bold text-foreground">
+                  Page {page + 1} / {totalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  disabled={page >= totalPages - 1 || loading}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Suivant
+                </Button>
+              </div>
             </div>
           )}
         </section>

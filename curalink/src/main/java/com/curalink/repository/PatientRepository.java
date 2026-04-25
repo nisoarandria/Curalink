@@ -92,4 +92,14 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
 					""",
 			nativeQuery = true)
 	Page<Patient> searchPatientsForMedecin(@Param("medecinId") Long medecinId, @Param("q") String q, Pageable pageable);
+
+	@Query(
+			value = """
+					SELECT CASE WHEN COUNT(*) > 0 THEN true ELSE false END
+					FROM rendez_vous rv
+					WHERE rv.patient_id = :patientId
+					  AND rv.medecin_id = :medecinId
+					""",
+			nativeQuery = true)
+	boolean existsLinkedToMedecin(@Param("patientId") Long patientId, @Param("medecinId") Long medecinId);
 }

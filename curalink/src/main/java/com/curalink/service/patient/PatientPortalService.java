@@ -87,11 +87,16 @@ public class PatientPortalService {
 			String q,
 			LocalDate date) {
 		Patient patient = requireCurrentPatient(currentUser);
-		LocalDate effectiveDate = (date != null) ? date : LocalDate.now();
-		LocalDateTime start = effectiveDate.atStartOfDay();
-		LocalDateTime end = effectiveDate.plusDays(1).atStartOfDay();
 		String search = (q == null || q.isBlank()) ? "" : q.trim();
 		Pageable pageable = PageRequest.of(page, clampSize(size), Sort.by(Sort.Direction.ASC, "dateHeure"));
+		if (date == null) {
+			return PageResponse.from(rendezVousRepository.searchForPatientNoDate(
+					patient.getId(),
+					search,
+					pageable).map(PatientPortalService::toRendezVousResponse));
+		}
+		LocalDateTime start = date.atStartOfDay();
+		LocalDateTime end = date.plusDays(1).atStartOfDay();
 		return PageResponse.from(rendezVousRepository.searchForPatientByDate(
 				patient.getId(),
 				start,
@@ -131,7 +136,10 @@ public class PatientPortalService {
 				rdv.getPatient().getId(),
 				rdv.getPatient().getPrenom() + " " + rdv.getPatient().getNom(),
 				rdv.getMedecin().getId(),
-				rdv.getMedecin().getPrenom() + " " + rdv.getMedecin().getNom());
+				rdv.getMedecin().getPrenom() + " " + rdv.getMedecin().getNom(),
+				rdv.getService().getNom(),
+				rdv.getMedecin().getAdresse(),
+				rdv.getMedecin().getNumeroInscription());
 	}
 
 	private static int clampSize(int size) {
@@ -141,7 +149,6 @@ public class PatientPortalService {
 	private static boolean matchesSearch(Ordonnance o, String q) {
 		String medNom = (o.getConsultation().getMedecin().getNom() + " " + o.getConsultation().getMedecin().getPrenom())
 				.toLowerCase(Locale.ROOT);
-		String prescription = o.getPrescription() != null ? o.getPrescription().toLowerCase(Locale.ROOT) : "";
-		return medNom.contains(q) || prescription.contains(q);
+		return medNom.contains(q);
 	}
 }

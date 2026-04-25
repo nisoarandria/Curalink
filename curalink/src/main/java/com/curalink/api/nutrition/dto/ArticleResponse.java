@@ -7,6 +7,7 @@ public record ArticleResponse(
 		String titre,
 		String contenu,
 		LocalDateTime datePublication,
+		String couvertureUrl,
 		RubriqueSummary rubrique,
 		long auteurId
 ) {

@@ -97,6 +97,7 @@ public class AdminStaffService {
 					m.getPrenom(),
 					m.getTelephone(),
 					m.getAdresse(),
+					m.getNumeroInscription(),
 					StaffRole.MEDECIN,
 					svc,
 					m.isFirstConnexion());
@@ -109,6 +110,7 @@ public class AdminStaffService {
 					n.getPrenom(),
 					n.getTelephone(),
 					n.getAdresse(),
+					null,
 					StaffRole.NUTRITIONNISTE,
 					null,
 					n.isFirstConnexion());
@@ -136,6 +138,10 @@ public class AdminStaffService {
 					throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
 							"Le champ serviceId est obligatoire pour la création d’un médecin");
 				}
+				if (!StringUtils.hasText(request.numeroInscription())) {
+					throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+							"Le champ numeroInscription est obligatoire pour la création d’un médecin");
+				}
 				ServiceItem service = serviceItemRepository.findById(request.serviceId())
 						.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Service introuvable"));
 				Medecin m = new Medecin(
@@ -143,7 +149,8 @@ public class AdminStaffService {
 						request.prenom().trim(),
 						email,
 						request.telephone().trim(),
-						request.adresse().trim(),
+						request.adresseCabinet().trim(),
+						request.numeroInscription().trim(),
 						null,
 						service);
 				m.setPasswordHash(hash);
@@ -156,7 +163,7 @@ public class AdminStaffService {
 						request.prenom().trim(),
 						email,
 						request.telephone().trim(),
-						request.adresse().trim(),
+						request.adresseCabinet().trim(),
 						null);
 				n.setPasswordHash(hash);
 				n.setFirstConnexion(true);
@@ -169,12 +176,14 @@ public class AdminStaffService {
 
 		Long outServiceId = null;
 		String outServiceNom = null;
+		String outNumeroInscription = null;
 		if (saved instanceof Medecin med) {
 			ServiceItem si = med.getService();
 			if (si != null) {
 				outServiceId = si.getId();
 				outServiceNom = si.getNom();
 			}
+			outNumeroInscription = med.getNumeroInscription();
 		}
 
 		return new CreateStaffResponse(
@@ -184,6 +193,7 @@ public class AdminStaffService {
 				saved.getPrenom(),
 				saved.getTelephone(),
 				saved.getAdresse(),
+				outNumeroInscription,
 				request.role(),
 				outServiceId,
 				outServiceNom,

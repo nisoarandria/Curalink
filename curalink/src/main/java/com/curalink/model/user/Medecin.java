@@ -1,6 +1,7 @@
 package com.curalink.model.user;
 
 import com.curalink.model.catalog.ServiceItem;
+import jakarta.persistence.Column;
 import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -19,6 +20,9 @@ public class Medecin extends User {
 	@JoinColumn(name = "service_item_id")
 	private ServiceItem service;
 
+	@Column(name = "numero_inscription")
+	private String numeroInscription;
+
 	public Medecin() {
 	}
 
@@ -28,10 +32,12 @@ public class Medecin extends User {
 			String email,
 			String telephone,
 			String adresse,
+			String numeroInscription,
 			String photoProfile,
 			ServiceItem service) {
 		super(nom, prenom, email, telephone, adresse, photoProfile, null);
 		this.service = service;
+		this.numeroInscription = numeroInscription;
 	}
 
 	public ServiceItem getService() {
@@ -40,5 +46,13 @@ public class Medecin extends User {
 
 	public void setService(ServiceItem service) {
 		this.service = service;
+	}
+
+	public String getNumeroInscription() {
+		return numeroInscription;
+	}
+
+	public void setNumeroInscription(String numeroInscription) {
+		this.numeroInscription = numeroInscription;
 	}
 }

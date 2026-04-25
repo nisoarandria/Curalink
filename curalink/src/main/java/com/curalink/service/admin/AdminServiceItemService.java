@@ -34,8 +34,8 @@ public class AdminServiceItemService {
 
 	private static final int MAX_PAGE_SIZE = 100;
 	private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
-			"image/jpeg", "image/png", "image/gif", "image/webp");
-	private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png", "gif", "webp");
+			"image/jpeg", "image/png", "image/gif", "image/webp", "image/avif");
+	private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png", "gif", "webp", "avif");
 
 	private final ServiceItemRepository serviceItemRepository;
 	private final ServiceItemStorageProperties storageProperties;
@@ -206,6 +206,7 @@ public class AdminServiceItemService {
 			case "image/png" -> "png";
 			case "image/gif" -> "gif";
 			case "image/webp" -> "webp";
+			case "image/avif" -> "avif";
 			default -> null;
 		};
 	}
