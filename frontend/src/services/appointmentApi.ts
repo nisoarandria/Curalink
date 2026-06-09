@@ -164,12 +164,8 @@ export async function sendChatMessage(message: string): Promise<string> {
   return data;
 }
 
-/** Envoyer un message au chatbot médical IA (endpoint public) */
-export async function sendChatMessage(message: string): Promise<string> {
-  const { data } = await publicClient.post<string>(
-    "/api/orientation/chat",
-    { message },
-    { responseType: "text" }
-  );
+/** Créer un utilisateur staff (ADMIN) */
+export async function createStaff(body: CreateStaffPayload) {
+  const { data } = await apiClient.post("/admin/staff", body);
   return data;
 }
