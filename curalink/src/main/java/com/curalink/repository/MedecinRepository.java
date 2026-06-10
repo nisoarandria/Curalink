@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface MedecinRepository extends JpaRepository<Medecin, Long> {
 	List<Medecin> findByServiceIdOrderByNomAscPrenomAsc(Long serviceId);
+
+	boolean existsByNumeroInscriptionIgnoreCase(String numeroInscription);
 }

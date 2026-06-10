@@ -1,11 +1,38 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { ActionButton } from "@/components/ui/action-button";
+import { AddButton } from "@/components/ui/add-button";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchBar } from "@/components/ui/search-bar";
+import { DataLoader } from "@/components/ui/data-loader";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Logo } from "@/components/ui/logo";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 import { apiClient, logoutRequest } from "@/services/axiosInstance";
 import avatarDefault from "@/assets/avatar.webp";
+import {
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  Baby01Icon,
+  BloodIcon,
+  BloodPressureIcon,
+  Bookmark01Icon,
+  BookOpen01Icon,
+  Bone01Icon,
+  Calendar01Icon,
+  ClipboardIcon,
+  Clock01Icon,
+  FlashIcon,
+  HeartAddIcon,
+  Home01Icon,
+  Icon,
+  Idea01Icon,
+  InformationCircleIcon,
+  Logout01Icon,
+  Notification01Icon,
+  WeightScale01Icon,
+} from "@/components/ui/icon";
 
 type ApiArticle = {
   id: number;
@@ -90,176 +117,49 @@ const CATEGORY_VISUALS: Record<string, CategoryVisual> = {
     image:
       "https://images.unsplash.com/photo-1579154204601-01588f351e67?auto=format&fit=crop&w=400&q=80",
     accent: "from-red-500/80 to-red-600/80",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M12 2v8" />
-        <path d="m4.93 10.93 1.41 1.41" />
-        <path d="M2 18h2" />
-        <path d="M20 18h2" />
-        <path d="m19.07 10.93-1.41 1.41" />
-        <path d="M22 22H2" />
-        <path d="m8 22 4-10 4 10" />
-      </svg>
-    ),
+    icon: <Icon icon={BloodPressureIcon} className="size-[18px]" />,
   },
   hypertension: {
     image:
       "https://images.unsplash.com/photo-1628348068343-c6a848d2b6dd?auto=format&fit=crop&w=400&q=80",
     accent: "from-rose-500/80 to-pink-600/80",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z" />
-      </svg>
-    ),
+    icon: <Icon icon={HeartAddIcon} className="size-[18px]" />,
   },
   cancer: {
     image:
       "https://images.unsplash.com/photo-1579165466991-467135ad3110?auto=format&fit=crop&w=400&q=80",
     accent: "from-purple-500/80 to-violet-600/80",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M7 21a4 4 0 0 1-4-4V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v12a4 4 0 0 1-4 4Zm0 0h12a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-5" />
-        <path d="M18 7V5a2 2 0 0 0-2-2h-2" />
-      </svg>
-    ),
+    icon: <Icon icon={ClipboardIcon} className="size-[18px]" />,
   },
   acancer: {
     image:
       "https://images.unsplash.com/photo-1579165466991-467135ad3110?auto=format&fit=crop&w=400&q=80",
     accent: "from-purple-500/80 to-violet-600/80",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M7 21a4 4 0 0 1-4-4V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v12a4 4 0 0 1-4 4Zm0 0h12a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-5" />
-        <path d="M18 7V5a2 2 0 0 0-2-2h-2" />
-      </svg>
-    ),
+    icon: <Icon icon={ClipboardIcon} className="size-[18px]" />,
   },
   osteoporose: {
     image:
       "https://images.unsplash.com/photo-1559757175-5700dde675bc?auto=format&fit=crop&w=400&q=80",
     accent: "from-slate-500/80 to-slate-700/80",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M17 10c.7-.7 1.69 0 2.5 0a2.5 2.5 0 1 0 0-5 .5.5 0 0 1-.5-.5 2.5 2.5 0 1 0-5 0c0 .81.7 1.8 0 2.5l-7 7c-.7.7-1.69 0-2.5 0a2.5 2.5 0 0 0 0 5c.28 0 .5.22.5.5a2.5 2.5 0 1 0 5 0c0-.81-.7-1.8 0-2.5Z" />
-      </svg>
-    ),
+    icon: <Icon icon={Bone01Icon} className="size-[18px]" />,
   },
   anemie: {
     image:
       "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&w=400&q=80",
     accent: "from-red-500/80 to-rose-600/80",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7Z" />
-      </svg>
-    ),
+    icon: <Icon icon={BloodIcon} className="size-[18px]" />,
   },
   obesite: {
     image:
       "https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=400&q=80",
     accent: "from-orange-500/80 to-amber-600/80",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M6.5 6.5 17.5 17.5" />
-        <path d="m21 21-1-1" />
-        <path d="m3 3 1 1" />
-        <path d="m18 22 4-4" />
-        <path d="m2 6 4-4" />
-        <path d="m3 10 7-7" />
-        <path d="m14 21 7-7" />
-      </svg>
-    ),
+    icon: <Icon icon={WeightScale01Icon} className="size-[18px]" />,
   },
   grossesse: {
     image:
       "https://images.unsplash.com/photo-1531983412531-1f49a365ffed?auto=format&fit=crop&w=400&q=80",
     accent: "from-pink-500/80 to-rose-500/80",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <circle cx="12" cy="8" r="5" />
-        <path d="M20 21a8 8 0 0 0-16 0" />
-      </svg>
-    ),
+    icon: <Icon icon={Baby01Icon} className="size-[18px]" />,
   },
 };
 
@@ -448,22 +348,7 @@ export default function NutritionistDashboard() {
           image:
             "https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=400&q=80",
           accent: "from-slate-500/80 to-slate-700/80",
-          icon: (
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-            </svg>
-          ),
+          icon: <Icon icon={BookOpen01Icon} className="size-[18px]" />,
         };
         return {
           id: item.rubriqueId,
@@ -505,34 +390,11 @@ export default function NutritionistDashboard() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F5F6FA] text-foreground font-sans">
+    <div className="flex h-screen overflow-hidden bg-slate-50/80 text-foreground font-sans">
       {/* Sidebar (desktop) */}
       <aside className="hidden h-screen w-72 shrink-0 flex-col border-r border-border/40 bg-white md:sticky md:top-0 md:flex">
-        {/* Logo */}
-        <div className="flex h-20 items-center gap-2.5 px-6">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/20">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M11 2a2 2 0 0 0-2 2v5H4a2 2 0 0 0-2 2v2c0 1.1.9 2 2 2h5v5c0 1.1.9 2 2 2h2a2 2 0 0 0 2-2v-5h5a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2h-5V4a2 2 0 0 0-2-2h-2z" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xl font-black tracking-tight leading-none">
-              Curalink
-            </p>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1">
-              Espace Nutritionniste
-            </p>
-          </div>
+        <div className="flex h-20 items-center px-6">
+          <Logo size="md" subtitle="Espace Nutritionniste" />
         </div>
 
         {/* Profile Card */}
@@ -560,27 +422,12 @@ export default function NutritionistDashboard() {
 
         {/* Bouton principal */}
         <div className="px-4 pb-4">
-          <Button
+          <AddButton
             onClick={() => navigate("/nutritionniste/articles/new")}
-            className="w-full gap-2 rounded-xl h-11 shadow-md font-bold group"
+            className="h-11 w-full rounded-xl font-bold shadow-md"
           >
-            <svg
-              className="transition-transform group-hover:rotate-90 duration-300"
-              xmlns="http://www.w3.org/2000/svg"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="12" x2="12" y1="5" y2="19" />
-              <line x1="5" x2="19" y1="12" y2="12" />
-            </svg>
             Nouvel article
-          </Button>
+          </AddButton>
         </div>
 
         <div className="flex-1 px-4">
@@ -599,20 +446,7 @@ export default function NutritionistDashboard() {
               <div
                 className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${activeTab === "accueil" ? "bg-primary text-primary-foreground" : "bg-muted/50 group-hover:bg-muted"}`}
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                  <polyline points="9 22 9 12 15 12 15 22" />
-                </svg>
+                <Icon icon={Home01Icon} className="size-[18px]" />
               </div>
               <span className="flex-1 text-left">Tableau de bord</span>
             </button>
@@ -627,20 +461,7 @@ export default function NutritionistDashboard() {
               <div
                 className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${activeTab === "articles" ? "bg-primary text-primary-foreground" : "bg-muted/50 group-hover:bg-muted"}`}
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-                </svg>
+                <Icon icon={BookOpen01Icon} className="size-[18px]" />
               </div>
               <span className="flex-1 text-left">Mes articles</span>
               <span
@@ -654,21 +475,7 @@ export default function NutritionistDashboard() {
           {/* Box d'aide */}
           <div className="mt-8 rounded-2xl bg-muted/50 p-4 border border-border/60">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary mb-3">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                <path d="M12 17h.01" />
-              </svg>
+              <Icon icon={InformationCircleIcon} className="size-5" />
             </div>
             <p className="text-sm font-bold leading-tight mb-1">
               Besoin d'aide ?
@@ -695,21 +502,7 @@ export default function NutritionistDashboard() {
             disabled={isLoggingOut}
           >
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted/50">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" x2="9" y1="12" y2="12" />
-              </svg>
+              <Icon icon={Logout01Icon} className="size-4" />
             </div>
             {isLoggingOut ? "Déconnexion..." : "Se déconnecter"}
           </Button>
@@ -718,7 +511,7 @@ export default function NutritionistDashboard() {
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto">
-        <header className="flex h-20 items-center justify-between bg-[#F5F6FA]/80 backdrop-blur-md px-6 md:px-10 sticky top-0 z-20">
+        <header className="sticky top-0 z-20 flex h-20 items-center justify-between border-b border-border/40 bg-white/80 backdrop-blur-md px-6 md:px-10">
           <div>
             <h1 className="text-xl font-black tracking-tight">
               {activeTab === "accueil"
@@ -733,47 +526,21 @@ export default function NutritionistDashboard() {
           </div>
           <div className="flex items-center gap-3">
             {activeTab === "articles" && (
-              <div className="relative hidden md:block">
-                <svg
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="m21 21-4.3-4.3" />
-                </svg>
-                <Input
-                  placeholder="Rechercher des articles…"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  className="pl-10 w-[280px] h-11 bg-white border-0 shadow-sm rounded-full focus-visible:ring-2 focus-visible:ring-primary/20 text-sm font-medium"
-                />
-              </div>
+              <SearchBar
+                placeholder="Rechercher des articles…"
+                value={searchInput}
+                onValueChange={setSearchInput}
+                size="lg"
+                containerClassName="hidden md:block w-[280px]"
+                className="rounded-full border-0 bg-white shadow-sm focus-visible:ring-primary/20"
+              />
             )}
             <Button
               variant="ghost"
               size="icon"
               className="rounded-full bg-white shadow-sm h-11 w-11 relative"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-              </svg>
+              <Icon icon={Notification01Icon} className="size-5" />
               <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-red-500 border-2 border-white"></span>
             </Button>
           </div>
@@ -798,19 +565,7 @@ export default function NutritionistDashboard() {
                     className="rounded-full bg-white font-semibold gap-2 h-10 border-muted-foreground/20"
                   >
                     Voir tout
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" />
-                    </svg>
+                    <Icon icon={ArrowRight01Icon} className="size-3.5" strokeWidth={2.5} />
                   </Button>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
@@ -856,19 +611,7 @@ export default function NutritionistDashboard() {
                             {cat.count} articles
                           </p>
                           <div className="h-6 w-6 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0">
-                            <svg
-                              width="12"
-                              height="12"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="3"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M5 12h14" />
-                              <path d="m12 5 7 7-7 7" />
-                            </svg>
+                            <Icon icon={ArrowRight01Icon} className="size-3" strokeWidth={3} />
                           </div>
                         </div>
                       </div>
@@ -891,21 +634,7 @@ export default function NutritionistDashboard() {
                         </p>
                       </div>
                       <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
-                          <path d="M9 18h6" />
-                          <path d="M10 22h4" />
-                        </svg>
+                        <Icon icon={Idea01Icon} className="size-4" />
                       </div>
                     </div>
                     <Card
@@ -929,18 +658,7 @@ export default function NutritionistDashboard() {
 
                       <div className="absolute top-5 left-5 right-5 flex items-start justify-between">
                         <div className="inline-flex items-center gap-1.5 rounded-full bg-white/15 backdrop-blur-md px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white border border-white/20">
-                          <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                          </svg>
+                          <Icon icon={FlashIcon} className="size-3" strokeWidth={2.5} />
                           {homeArticles[0].rubrique?.titre ?? "—"}
                         </div>
                         <button
@@ -948,19 +666,7 @@ export default function NutritionistDashboard() {
                           onClick={(e) => e.stopPropagation()}
                           className="h-9 w-9 rounded-full bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white hover:text-foreground transition-all"
                         >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
-                          </svg>
+                          <Icon icon={Bookmark01Icon} className="size-4" />
                         </button>
                       </div>
 
@@ -990,19 +696,7 @@ export default function NutritionistDashboard() {
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5 text-xs font-bold bg-white/15 backdrop-blur-md rounded-full px-3 py-1.5">
-                            <svg
-                              width="12"
-                              height="12"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <circle cx="12" cy="12" r="10" />
-                              <polyline points="12 6 12 12 16 14" />
-                            </svg>
+                            <Icon icon={Clock01Icon} className="size-3" />
                             {estimateReadMinutes(homeArticles[0].contenu)} min
                           </div>
                         </div>
@@ -1029,18 +723,7 @@ export default function NutritionistDashboard() {
                         size="icon"
                         className="h-9 w-9 rounded-full border-muted-foreground/20 bg-white hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors"
                       >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="m15 18-6-6 6-6" />
-                        </svg>
+                        <Icon icon={ArrowLeft01Icon} className="size-3.5" strokeWidth={2.5} />
                       </Button>
                       <Button
                         onClick={() => scrollLatest("right")}
@@ -1048,18 +731,7 @@ export default function NutritionistDashboard() {
                         size="icon"
                         className="h-9 w-9 rounded-full border-muted-foreground/20 bg-white hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors"
                       >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="m9 18 6-6-6-6" />
-                        </svg>
+                        <Icon icon={ArrowRight01Icon} className="size-3.5" strokeWidth={2.5} />
                       </Button>
                     </div>
                   </div>
@@ -1090,18 +762,7 @@ export default function NutritionistDashboard() {
                             onClick={(e) => e.stopPropagation()}
                             className="absolute top-3 right-3 h-8 w-8 rounded-full bg-white/95 backdrop-blur-sm flex items-center justify-center text-muted-foreground hover:text-primary transition-colors shadow-sm"
                           >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
-                            </svg>
+                            <Icon icon={Bookmark01Icon} className="size-3.5" />
                           </button>
                         </div>
                         <CardContent className="p-5">
@@ -1123,19 +784,7 @@ export default function NutritionistDashboard() {
                               </span>
                             </div>
                             <div className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-muted/30 px-2.5 py-1 text-[11px] font-bold text-muted-foreground">
-                              <svg
-                                width="11"
-                                height="11"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <circle cx="12" cy="12" r="10" />
-                                <polyline points="12 6 12 12 16 14" />
-                              </svg>
+                              <Icon icon={Clock01Icon} className="size-[11px]" />
                               {estimateReadMinutes(article.contenu)} min
                             </div>
                           </div>
@@ -1144,21 +793,7 @@ export default function NutritionistDashboard() {
                     ))}
                     {homeArticles.length <= 1 && (
                       <div className="flex-none w-[290px] h-[380px] border-2 border-dashed border-muted-foreground/20 rounded-3xl flex flex-col items-center justify-center text-muted-foreground p-6 text-center bg-white/50">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="32"
-                          height="32"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="mb-4 opacity-50"
-                        >
-                          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                          <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-                        </svg>
+                        <Icon icon={BookOpen01Icon} className="mb-4 size-8 opacity-50" />
                         <p className="text-sm font-semibold">
                           Publiez d'autres articles pour les voir apparaître
                           ici.
@@ -1183,11 +818,12 @@ export default function NutritionistDashboard() {
                   </p>
                 </div>
                 <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-end md:w-auto">
-                  <Input
+                  <SearchBar
                     placeholder="Filtrer par texte…"
                     value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    className="h-10 w-full rounded-xl bg-muted/40 sm:w-[220px] md:hidden"
+                    onValueChange={setSearchInput}
+                    containerClassName="w-full sm:w-[220px] md:hidden"
+                    className="rounded-xl bg-muted/40"
                   />
                   <select
                     className="h-10 w-full rounded-xl border bg-background px-4 py-1 text-sm font-semibold text-foreground shadow-sm sm:w-auto"
@@ -1217,92 +853,32 @@ export default function NutritionistDashboard() {
               )}
 
               {listLoading ? (
-                <div
-                  className="space-y-5"
-                  role="status"
-                  aria-live="polite"
-                  aria-busy="true"
-                >
-                  <div className="flex items-center justify-center gap-4 rounded-[24px] border border-border/50 bg-white px-6 py-7 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)]">
-                    <div className="relative h-10 w-10 shrink-0">
-                      <span
-                        className="absolute inset-0 rounded-full border-2 border-muted/60"
-                        aria-hidden
-                      />
-                      <span
-                        className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary border-r-primary/30"
-                        aria-hidden
-                      />
-                    </div>
-                    <div className="min-w-0 text-left">
-                      <p className="text-sm font-bold tracking-tight text-foreground">
-                        Chargement des articles
-                      </p>
-                      <p className="text-xs font-medium text-muted-foreground">
-                        Un instant, nous récupérons votre bibliothèque…
-                      </p>
-                    </div>
-                  </div>
-                  <div
-                    className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4"
-                    aria-hidden
-                  >
-                    {Array.from({ length: LIST_PAGE_SIZE }).map((_, index) => (
-                      <Card
-                        key={`article-skeleton-${index}`}
-                        className="overflow-hidden rounded-[20px] border border-border/30 bg-white shadow-sm"
-                      >
-                        <div className="h-40 w-full animate-pulse bg-linear-to-br from-muted/40 via-muted/25 to-muted/50" />
-                        <CardContent className="space-y-3 p-5">
-                          <div className="h-4 w-[88%] animate-pulse rounded-md bg-muted/55" />
-                          <div className="h-3 w-full animate-pulse rounded-md bg-muted/35" />
-                          <div className="h-3 w-[72%] animate-pulse rounded-md bg-muted/35" />
-                          <div className="h-3 w-24 animate-pulse rounded-md bg-muted/25" />
-                        </CardContent>
-                        <div className="flex items-center justify-between border-t border-border/35 bg-muted/15 p-3">
-                          <div className="flex items-center gap-2 pl-1">
-                            <div className="h-6 w-6 shrink-0 animate-pulse rounded-full bg-muted/45" />
-                            <div className="h-3 w-24 animate-pulse rounded-md bg-muted/35" />
-                          </div>
-                          <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted/30" />
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
+                <DataLoader
+                  layout="row"
+                  size="lg"
+                  message="Chargement des articles"
+                  description="Un instant, nous récupérons votre bibliothèque…"
+                  className="w-full"
+                />
               ) : listArticles.length === 0 ? (
-                <div className="rounded-[24px] border-2 border-dashed bg-white/50 p-12 text-center">
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="28"
-                      height="28"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="text-primary"
-                    >
-                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-                    </svg>
-                  </div>
-                  <h3 className="mt-4 text-lg font-bold">Aucun article</h3>
-                  <p className="mb-6 mt-2 text-sm font-medium text-muted-foreground">
-                    {selectedRubrique === "Toutes les catégories" &&
+                <EmptyState
+                  title="Aucun article"
+                  description={
+                    selectedRubrique === "Toutes les catégories" &&
                     !debouncedSearch
                       ? "Vous n'avez pas encore publié d'articles."
-                      : `Aucun article ne correspond à votre recherche ou à la catégorie « ${selectedRubrique} ».`}
-                  </p>
-                  <Button
-                    onClick={() => navigate("/nutritionniste/articles/new")}
-                    className="rounded-full font-bold px-8"
-                  >
-                    Créer un article
-                  </Button>
-                </div>
+                      : `Aucun article ne correspond à votre recherche ou à la catégorie « ${selectedRubrique} ».`
+                  }
+                  size="lg"
+                  action={
+                    <AddButton
+                      onClick={() => navigate("/nutritionniste/articles/new")}
+                      className="rounded-full px-8 font-bold"
+                    >
+                      Créer un article
+                    </AddButton>
+                  }
+                />
               ) : (
                 <>
                   <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
@@ -1338,18 +914,7 @@ export default function NutritionistDashboard() {
                             {stripHtml(article.contenu)}
                           </p>
                           <div className="flex items-center text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                            <svg
-                              className="mr-1.5"
-                              width="12"
-                              height="12"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <circle cx="12" cy="12" r="10" />
-                              <polyline points="12 6 12 12 16 14" />
-                            </svg>
+                            <Icon icon={Calendar01Icon} className="mr-1.5 size-3" />
                             {formatArticleDate(article.datePublication)}
                           </div>
                         </CardContent>
@@ -1364,32 +929,18 @@ export default function NutritionistDashboard() {
                               {article.auteurNom ?? displayName}
                             </span>
                           </div>
-                          <Button
+                          <ActionButton
+                            action="edit"
                             variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 shrink-0 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10"
+                            size="icon-sm"
+                            className="shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
                             onClick={(e) => {
                               e.stopPropagation();
                               navigate(
                                 `/nutritionniste/articles/${article.id}`,
                               );
                             }}
-                          >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M12 20h9" />
-                              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                            </svg>
-                          </Button>
+                          />
                         </div>
                       </Card>
                     ))}

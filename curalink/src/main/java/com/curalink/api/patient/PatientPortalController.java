@@ -1,7 +1,11 @@
 package com.curalink.api.patient;
 
 import com.curalink.api.dto.PageResponse;
+import com.curalink.api.medecin.dto.AntecedentResponse;
+import com.curalink.api.medecin.dto.ConstanteVitaleResponse;
+import com.curalink.api.medecin.dto.ConsultationResponse;
 import com.curalink.api.patient.dto.PatientOrdonnanceResponse;
+import com.curalink.api.patient.dto.PatientProfileResponse;
 import com.curalink.api.rendezvous.dto.RendezVousResponse;
 import com.curalink.security.AuthenticatedUser;
 import com.curalink.security.RequireUserTypes;
@@ -20,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/patients/me")
@@ -30,6 +35,30 @@ public class PatientPortalController {
 
 	public PatientPortalController(PatientPortalService patientPortalService) {
 		this.patientPortalService = patientPortalService;
+	}
+
+	@GetMapping
+	public ResponseEntity<PatientProfileResponse> getMyProfile(
+			@AuthenticationPrincipal AuthenticatedUser currentUser) {
+		return ResponseEntity.ok(patientPortalService.getMyProfile(currentUser));
+	}
+
+	@GetMapping("/antecedents")
+	public ResponseEntity<List<AntecedentResponse>> listMyAntecedents(
+			@AuthenticationPrincipal AuthenticatedUser currentUser) {
+		return ResponseEntity.ok(patientPortalService.listMyAntecedents(currentUser));
+	}
+
+	@GetMapping("/constantes")
+	public ResponseEntity<List<ConstanteVitaleResponse>> listMyConstantes(
+			@AuthenticationPrincipal AuthenticatedUser currentUser) {
+		return ResponseEntity.ok(patientPortalService.listMyConstantes(currentUser));
+	}
+
+	@GetMapping("/consultations")
+	public ResponseEntity<List<ConsultationResponse>> listMyConsultations(
+			@AuthenticationPrincipal AuthenticatedUser currentUser) {
+		return ResponseEntity.ok(patientPortalService.listMyConsultations(currentUser));
 	}
 
 	@GetMapping("/ordonnances")

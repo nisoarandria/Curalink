@@ -1,9 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
+import { ActionButton } from "@/components/ui/action-button";
+import { AddButton } from "@/components/ui/add-button";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { SearchBar } from "@/components/ui/search-bar";
+import { Logo } from "@/components/ui/logo";
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
+import { Modal } from "@/components/ui/modal";
+import { PageLoader } from "@/components/ui/page-loader";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Add01Icon,
+  Analytics02Icon,
+  Hospital01Icon,
+  Icon,
+  Logout01Icon,
+  Upload01Icon,
+  UserGroupIcon,
+  UserIcon,
+} from "@/components/ui/icon";
 import { useAuth } from "@/hooks/useAuth";
-import { createStaff, type CreateStaffPayload } from "@/services/appointmentApi";
+import {
+  createStaff,
+  type CreateStaffPayload,
+} from "@/services/appointmentApi";
 import {
   apiClient,
   apiClientMultipart,
@@ -22,13 +43,18 @@ type PageResponse<T> = {
 
 type StaffItem = {
   id: number;
+  email: string;
   nom: string;
   prenom: string;
   role?: string;
   telephone?: string;
   adresseCabinet?: string;
-  numeroInscription?: string;
-  serviceNom?: string;
+  numeroInscription?: string | null;
+  service?: {
+    id: number;
+    nom: string;
+  } | null;
+  isFirstConnexion?: boolean;
 };
 
 type ServiceItem = {
@@ -56,6 +82,7 @@ type ServiceForm = {
   nom: string;
   description: string;
   illustration: File | null;
+  currentIllustrationUrl?: string;
 };
 
 function normalizeRoleLabel(role?: string): string {
@@ -99,6 +126,9 @@ export default function AdminDashboard() {
   const [isDeletingServiceId, setIsDeletingServiceId] = useState<number | null>(
     null,
   );
+  const [serviceToDelete, setServiceToDelete] = useState<ServiceItem | null>(
+    null,
+  );
   const [serviceError, setServiceError] = useState<string | null>(null);
   const [serviceSuccess, setServiceSuccess] = useState<string | null>(null);
   const [serviceForm, setServiceForm] = useState<ServiceForm>({
@@ -116,24 +146,25 @@ export default function AdminDashboard() {
     numeroInscription: "",
     serviceId: "",
   });
+  const [selectedStaff, setSelectedStaff] = useState<StaffItem | null>(null);
+  const [isStaffDetailModalOpen, setIsStaffDetailModalOpen] = useState(false);
 
   useEffect(() => {
     const loadOverviewData = async () => {
       setLoading(true);
       setError(null);
       try {
-        const [staffRes, patientRes, serviceRes] =
-          await Promise.all([
-            apiClient.get<PageResponse<StaffItem>>("/admin/staff", {
-              params: { page: 0, size: 8, q: staffQuery || undefined },
-            }),
-            apiClient.get<PageResponse<unknown>>("/admin/patients", {
-              params: { page: 0, size: 1 },
-            }),
-            apiClient.get<PageResponse<ServiceItem>>("/admin/services", {
-              params: { page: 0, size: 200 },
-            }),
-          ]);
+        const [staffRes, patientRes, serviceRes] = await Promise.all([
+          apiClient.get<PageResponse<StaffItem>>("/admin/staff", {
+            params: { page: 0, size: 8, q: staffQuery || undefined },
+          }),
+          apiClient.get<PageResponse<unknown>>("/admin/patients", {
+            params: { page: 0, size: 1 },
+          }),
+          apiClient.get<PageResponse<ServiceItem>>("/admin/services", {
+            params: { page: 0, size: 200 },
+          }),
+        ]);
 
         setStaffList(staffRes.data?.content ?? []);
         setServiceList(serviceRes.data?.content ?? []);
@@ -291,6 +322,7 @@ export default function AdminDashboard() {
       nom: service.nom ?? "",
       description: service.description ?? "",
       illustration: null,
+      currentIllustrationUrl: service.illustrationUrl,
     });
     setServiceError(null);
     setServiceSuccess(null);
@@ -304,7 +336,7 @@ export default function AdminDashboard() {
   };
 
   const handleServiceFormChange = (
-    field: keyof Omit<ServiceForm, "illustration">,
+    field: keyof Omit<ServiceForm, "illustration" | "currentIllustrationUrl">,
     value: string,
   ) => {
     setServiceForm((prev) => ({ ...prev, [field]: value }));
@@ -333,7 +365,10 @@ export default function AdminDashboard() {
       }
 
       if (serviceForm.id) {
-        await apiClientMultipart.put(`/admin/services/${serviceForm.id}`, formData);
+        await apiClientMultipart.put(
+          `/admin/services/${serviceForm.id}`,
+          formData,
+        );
         setServiceSuccess("Service mis à jour avec succès.");
       } else {
         await apiClientMultipart.post("/admin/services", formData);
@@ -348,15 +383,16 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleDeleteService = async (service: ServiceItem) => {
-    if (!window.confirm(`Supprimer le service "${service.nom}" ?`)) return;
-    setIsDeletingServiceId(service.id);
+  const handleDeleteServiceConfirmed = async () => {
+    if (!serviceToDelete) return;
+    setIsDeletingServiceId(serviceToDelete.id);
     setServiceError(null);
     setServiceSuccess(null);
     try {
-      await apiClient.delete(`/admin/services/${service.id}`);
+      await apiClient.delete(`/admin/services/${serviceToDelete.id}`);
       setServiceSuccess("Service supprimé avec succès.");
       setServiceLoadTick((prev) => prev + 1);
+      setServiceToDelete(null);
     } catch {
       setServiceError("Impossible de supprimer ce service.");
     } finally {
@@ -364,101 +400,136 @@ export default function AdminDashboard() {
     }
   };
 
+  const openStaffDetailModal = (staff: StaffItem) => {
+    setSelectedStaff(staff);
+    setIsStaffDetailModalOpen(true);
+  };
+
+  const closeStaffDetailModal = () => {
+    setIsStaffDetailModalOpen(false);
+    setSelectedStaff(null);
+  };
+
   const dashboardCards = [
     {
       title: "Staff médical",
       value: totalStaff,
       subtitle: "Médecins + nutritionnistes",
-      icon: (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-          <circle cx="9" cy="7" r="4" />
-          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-        </svg>
-      ),
+      icon: <Icon icon={UserGroupIcon} className="size-5" />,
     },
     {
       title: "Patients",
       value: totalPatients,
       subtitle: "Comptes enregistrés",
-      icon: (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-          <circle cx="12" cy="7" r="4" />
-        </svg>
-      ),
+      icon: <Icon icon={UserIcon} className="size-5" />,
     },
     {
       title: "Services",
       value: totalServices,
       subtitle: "Catalogue clinique",
-      icon: (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M12 2v20" />
-          <path d="M2 12h20" />
-        </svg>
-      ),
+      icon: <Icon icon={Add01Icon} className="size-5" />,
     },
   ];
 
+  const staffColumns = useMemo<DataTableColumn<StaffItem>[]>(
+    () => [
+      {
+        header: "Nom",
+        cell: (item) => (
+          <span className="font-semibold">
+            {item.prenom} {item.nom}
+          </span>
+        ),
+      },
+      {
+        header: "Email",
+        cell: (item) => (
+          <span className="text-muted-foreground">{item.email}</span>
+        ),
+      },
+      {
+        header: "Rôle",
+        cell: (item) => normalizeRoleLabel(item.role),
+      },
+      {
+        header: "Téléphone",
+        cell: (item) => item.telephone || "-",
+      },
+      {
+        header: "Actions",
+        cell: (item) => (
+          <ActionButton
+            action="info"
+            onClick={() => openStaffDetailModal(item)}
+          />
+        ),
+      },
+    ],
+    [],
+  );
+
+  const serviceColumns = useMemo<DataTableColumn<ServiceItem>[]>(
+    () => [
+      {
+        header: "Illustration",
+        cell: (service) =>
+          service.illustrationUrl ? (
+            <img
+              src={service.illustrationUrl}
+              alt={service.nom}
+              className="h-12 w-16 rounded-md border border-border/40 object-cover"
+            />
+          ) : (
+            <div className="flex h-12 w-16 items-center justify-center rounded-md border border-dashed border-border text-[10px] text-muted-foreground">
+              Sans image
+            </div>
+          ),
+      },
+      {
+        header: "Nom service",
+        cell: (service) => (
+          <span className="font-semibold">{service.nom}</span>
+        ),
+      },
+      {
+        header: "Description",
+        cell: (service) => (
+          <p className="line-clamp-2 text-muted-foreground">
+            {service.description || "Aucune description."}
+          </p>
+        ),
+      },
+      {
+        header: "Actions",
+        cell: (service) => (
+          <div className="flex gap-1.5">
+            <ActionButton
+              action="edit"
+              onClick={() => openEditServiceModal(service)}
+            />
+            <ActionButton
+              action="delete"
+              onClick={() => setServiceToDelete(service)}
+              loading={isDeletingServiceId === service.id}
+            />
+          </div>
+        ),
+      },
+    ],
+    [isDeletingServiceId],
+  );
+
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F5F6FA] text-foreground font-sans">
+    <>
+    <PageLoader
+      show={loading}
+      message="Chargement de l'espace administrateur"
+      description="Récupération des données en cours…"
+    />
+    <div className="flex h-screen overflow-hidden bg-slate-50/80 text-foreground font-sans">
       <aside className="hidden h-screen w-72 shrink-0 flex-col border-r border-border/40 bg-white md:sticky md:top-0 md:flex">
-        <div className="flex h-20 items-center gap-2.5 px-6">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/20">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M11 2a2 2 0 0 0-2 2v5H4a2 2 0 0 0-2 2v2c0 1.1.9 2 2 2h5v5c0 1.1.9 2 2 2h2a2 2 0 0 0 2-2v-5h5a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2h-5V4a2 2 0 0 0-2-2h-2z" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xl font-black tracking-tight leading-none">
-              Curalink
-            </p>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1">
-              Espace Administrateur
-            </p>
-          </div>
+        <div className="flex h-20 items-center px-6">
+          <Logo size="md" subtitle="Espace Administrateur" />
         </div>
 
         <div className="mx-4 mt-2 mb-4 rounded-2xl bg-linear-to-br from-primary to-primary/80 p-4 text-primary-foreground shadow-lg shadow-primary/20">
@@ -482,14 +553,14 @@ export default function AdminDashboard() {
               Navigation
             </p>
             {[
-              { id: "overview", label: "Vue globale" },
-              { id: "staff", label: "Staff médical" },
-              { id: "services", label: "Services" },
+              { id: "overview", label: "Vue globale", icon: Analytics02Icon },
+              { id: "staff", label: "Staff médical", icon: UserGroupIcon },
+              { id: "services", label: "Services", icon: Hospital01Icon },
             ].map((item) => (
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id as TabKey)}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-all relative ${
+                className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-all relative overflow-hidden ${
                   activeTab === item.id
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -498,6 +569,15 @@ export default function AdminDashboard() {
                 {activeTab === item.id && (
                   <span className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 bg-primary rounded-r-full"></span>
                 )}
+                <div
+                  className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
+                    activeTab === item.id
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted/50 group-hover:bg-muted"
+                  }`}
+                >
+                  <Icon icon={item.icon} className="size-[18px]" />
+                </div>
                 <span className="flex-1 text-left">{item.label}</span>
               </button>
             ))}
@@ -511,13 +591,16 @@ export default function AdminDashboard() {
             onClick={handleLogout}
             disabled={isLoggingOut}
           >
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted/50">
+              <Icon icon={Logout01Icon} className="size-4" />
+            </div>
             {isLoggingOut ? "Déconnexion..." : "Se déconnecter"}
           </Button>
         </div>
       </aside>
 
       <main className="flex-1 overflow-y-auto">
-        <header className="sticky top-0 z-20 flex h-20 items-center justify-between bg-[#F5F6FA]/85 backdrop-blur-md px-6 md:px-10">
+        <header className="sticky top-0 z-20 flex h-20 items-center justify-between bg-white/80 backdrop-blur-md px-6 md:px-10 border-b border-border/40">
           <div>
             <h1 className="text-xl font-black tracking-tight">
               Dashboard administrateur
@@ -585,13 +668,15 @@ export default function AdminDashboard() {
                   </p>
                 </div>
                 <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row">
-                  <Input
+                  <SearchBar
                     value={staffQuery}
-                    onChange={(e) => setStaffQuery(e.target.value)}
-                    placeholder="Rechercher un membre du staff..."
-                    className="md:w-[320px]"
+                    onValueChange={setStaffQuery}
+                    placeholder="Rechercher un membre du staff…"
+                    containerClassName="md:w-[320px]"
                   />
-                  <Button onClick={openCreateStaffModal}>Ajouter un staff</Button>
+                  <AddButton onClick={openCreateStaffModal}>
+                    Ajouter un staff
+                  </AddButton>
                 </div>
               </div>
 
@@ -601,45 +686,14 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              <div className="overflow-x-auto rounded-xl border border-border/60">
-                <table className="w-full min-w-[680px] text-sm">
-                  <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <tr>
-                      <th className="px-4 py-3">Nom</th>
-                      <th className="px-4 py-3">Rôle</th>
-                      <th className="px-4 py-3">Téléphone</th>
-                      <th className="px-4 py-3">Service</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {staffList.length === 0 ? (
-                      <tr>
-                        <td
-                          className="px-4 py-6 text-muted-foreground"
-                          colSpan={4}
-                        >
-                          Aucun membre du staff trouvé.
-                        </td>
-                      </tr>
-                    ) : (
-                      staffList.map((item) => (
-                        <tr key={item.id} className="border-t border-border/50">
-                          <td className="px-4 py-3 font-semibold">
-                            {item.prenom} {item.nom}
-                          </td>
-                          <td className="px-4 py-3">
-                            {normalizeRoleLabel(item.role)}
-                          </td>
-                          <td className="px-4 py-3">{item.telephone || "-"}</td>
-                          <td className="px-4 py-3">
-                            {item.serviceNom || "-"}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                columns={staffColumns}
+                data={staffList}
+                getRowKey={(item) => item.id}
+                minWidth="860px"
+                emptyTitle="Aucun membre du staff"
+                emptyDescription="Aucun membre ne correspond à votre recherche."
+              />
             </section>
           )}
 
@@ -655,13 +709,15 @@ export default function AdminDashboard() {
                   </p>
                 </div>
                 <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row">
-                  <Input
+                  <SearchBar
                     value={serviceQuery}
-                    onChange={(e) => setServiceQuery(e.target.value)}
-                    placeholder="Rechercher un service..."
-                    className="md:w-[320px]"
+                    onValueChange={setServiceQuery}
+                    placeholder="Rechercher un service…"
+                    containerClassName="md:w-[320px]"
                   />
-                  <Button onClick={openCreateServiceModal}>Ajouter service</Button>
+                  <AddButton onClick={openCreateServiceModal}>
+                    Ajouter service
+                  </AddButton>
                 </div>
               </div>
 
@@ -676,98 +732,38 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              <div className="overflow-x-auto rounded-xl border border-border/60">
-                <table className="w-full min-w-[860px] text-sm">
-                  <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <tr>
-                      <th className="px-4 py-3">Illustration</th>
-                      <th className="px-4 py-3">Nom service</th>
-                      <th className="px-4 py-3">Description</th>
-                      <th className="px-4 py-3">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredServices.length === 0 ? (
-                      <tr>
-                        <td className="px-4 py-6 text-muted-foreground" colSpan={4}>
-                          Aucun service trouvé.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredServices.map((service) => (
-                        <tr key={service.id} className="border-t border-border/50">
-                          <td className="px-4 py-3">
-                            {service.illustrationUrl ? (
-                              <img
-                                src={service.illustrationUrl}
-                                alt={service.nom}
-                                className="h-12 w-16 rounded-md border border-border/40 object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-12 w-16 items-center justify-center rounded-md border border-dashed border-border text-[10px] text-muted-foreground">
-                                Sans image
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 font-semibold">{service.nom}</td>
-                          <td className="px-4 py-3 text-muted-foreground">
-                            <p className="line-clamp-2">
-                              {service.description || "Aucune description."}
-                            </p>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openEditServiceModal(service)}
-                              >
-                                Modifier
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="border-rose-200 text-rose-700 hover:bg-rose-50"
-                                onClick={() => handleDeleteService(service)}
-                                disabled={isDeletingServiceId === service.id}
-                              >
-                                {isDeletingServiceId === service.id
-                                  ? "Suppression..."
-                                  : "Supprimer"}
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                columns={serviceColumns}
+                data={filteredServices}
+                getRowKey={(service) => service.id}
+                minWidth="860px"
+                emptyTitle="Aucun service trouvé"
+                emptyDescription="Ajoutez un service ou modifiez votre recherche."
+              />
             </section>
           )}
-
         </div>
       </main>
 
-      {isCreateStaffModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-border/60 bg-white shadow-xl">
-            <div className="flex items-start justify-between border-b border-border/60 px-5 py-4">
-              <div>
-                <h3 className="text-lg font-extrabold tracking-tight">
-                  Ajouter un membre du staff
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  Choisis le type de staff puis renseigne les informations
-                  obligatoires.
-                </p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={closeCreateStaffModal}>
-                Fermer
-              </Button>
+      <Modal
+        open={isCreateStaffModalOpen}
+        onClose={closeCreateStaffModal}
+        title="Ajouter un membre du staff"
+        description="Choisis le type de staff puis renseigne les informations obligatoires."
+        onConfirm={handleCreateStaff}
+        confirmLabel={isCreatingStaff ? "Création…" : "Créer le staff"}
+        confirmDisabled={isCreatingStaff}
+        confirmLoading={isCreatingStaff}
+        error={
+          createStaffError ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800">
+              {createStaffError}
             </div>
-
-            <div className="grid gap-4 px-5 py-4 md:grid-cols-2">
+          ) : undefined
+        }
+        contentClassName="md:py-4"
+      >
+        <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
                 <label className="text-xs font-semibold text-muted-foreground">
                   Type de staff (obligatoire)
@@ -790,7 +786,9 @@ export default function AdminDashboard() {
                 </label>
                 <Input
                   value={createStaffForm.email}
-                  onChange={(e) => handleCreateStaffChange("email", e.target.value)}
+                  onChange={(e) =>
+                    handleCreateStaffChange("email", e.target.value)
+                  }
                   placeholder="email@curalink.com"
                 />
               </div>
@@ -813,7 +811,9 @@ export default function AdminDashboard() {
                 </label>
                 <Input
                   value={createStaffForm.nom}
-                  onChange={(e) => handleCreateStaffChange("nom", e.target.value)}
+                  onChange={(e) =>
+                    handleCreateStaffChange("nom", e.target.value)
+                  }
                   placeholder="Nom"
                 />
               </div>
@@ -852,7 +852,10 @@ export default function AdminDashboard() {
                     <Input
                       value={createStaffForm.numeroInscription}
                       onChange={(e) =>
-                        handleCreateStaffChange("numeroInscription", e.target.value)
+                        handleCreateStaffChange(
+                          "numeroInscription",
+                          e.target.value,
+                        )
                       }
                       placeholder="Numéro d'inscription"
                     />
@@ -878,58 +881,64 @@ export default function AdminDashboard() {
                   </div>
                 </>
               )}
-            </div>
+        </div>
+      </Modal>
 
-            <div className="space-y-3 border-t border-border/60 px-5 py-4">
-              {createStaffError && (
-                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800">
-                  {createStaffError}
+      <Modal
+        open={isServiceModalOpen}
+        onClose={closeServiceModal}
+        title={serviceForm.id ? "Modifier service" : "Ajouter service"}
+        description={
+          serviceForm.id
+            ? "Mets à jour les informations du service."
+            : "Crée un nouveau service avec son illustration."
+        }
+        onConfirm={handleSaveService}
+        confirmLabel={isSavingService ? "Enregistrement…" : "Enregistrer"}
+        confirmDisabled={isSavingService}
+        confirmLoading={isSavingService}
+        error={
+          serviceError ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800">
+              {serviceError}
+            </div>
+          ) : undefined
+        }
+      >
+        <div className="grid gap-4">
+              {/* Illustration actuelle en mode édition */}
+              {serviceForm.id && serviceForm.currentIllustrationUrl && (
+                <div className="flex flex-col items-center gap-3 rounded-xl bg-muted/30 p-4">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Illustration actuelle
+                  </p>
+                  <div className="relative">
+                    <div className="h-28 w-28 overflow-hidden rounded-full border-4 border-primary/20 shadow-lg shadow-primary/10">
+                      <img
+                        src={serviceForm.currentIllustrationUrl}
+                        alt="Illustration actuelle"
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md">
+                      <Icon icon={Upload01Icon} className="size-3.5" strokeWidth={2.5} />
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Choisis un nouveau fichier ci-dessous pour remplacer l'image
+                  </p>
                 </div>
               )}
-              <div className="flex justify-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={closeCreateStaffModal}
-                  disabled={isCreatingStaff}
-                >
-                  Annuler
-                </Button>
-                <Button onClick={handleCreateStaff} disabled={isCreatingStaff}>
-                  {isCreatingStaff ? "Création..." : "Créer le staff"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {isServiceModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-border/60 bg-white shadow-xl">
-            <div className="flex items-start justify-between border-b border-border/60 px-5 py-4">
-              <div>
-                <h3 className="text-lg font-extrabold tracking-tight">
-                  {serviceForm.id ? "Modifier service" : "Ajouter service"}
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  {serviceForm.id
-                    ? "Mets à jour les informations du service."
-                    : "Crée un nouveau service avec son illustration."}
-                </p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={closeServiceModal}>
-                Fermer
-              </Button>
-            </div>
-
-            <div className="grid gap-4 px-5 py-4">
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-muted-foreground">
                   Nom service (obligatoire)
                 </label>
                 <Input
                   value={serviceForm.nom}
-                  onChange={(e) => handleServiceFormChange("nom", e.target.value)}
+                  onChange={(e) =>
+                    handleServiceFormChange("nom", e.target.value)
+                  }
                   placeholder="Cardiologie, Nutrition..."
                 />
               </div>
@@ -950,7 +959,8 @@ export default function AdminDashboard() {
 
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-muted-foreground">
-                  Illustration {!serviceForm.id ? "(obligatoire)" : "(optionnel)"}
+                  Illustration{" "}
+                  {!serviceForm.id ? "(obligatoire)" : "(optionnel)"}
                 </label>
                 <Input
                   type="file"
@@ -962,31 +972,132 @@ export default function AdminDashboard() {
                     }))
                   }
                 />
+                {serviceForm.illustration && (
+                  <p className="text-[11px] text-emerald-600 font-medium">
+                    Nouveau fichier sélectionné :{" "}
+                    {serviceForm.illustration.name}
+                  </p>
+                )}
               </div>
-            </div>
-
-            <div className="space-y-3 border-t border-border/60 px-5 py-4">
-              {serviceError && (
-                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800">
-                  {serviceError}
-                </div>
-              )}
-              <div className="flex justify-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={closeServiceModal}
-                  disabled={isSavingService}
-                >
-                  Annuler
-                </Button>
-                <Button onClick={handleSaveService} disabled={isSavingService}>
-                  {isSavingService ? "Enregistrement..." : "Enregistrer"}
-                </Button>
-              </div>
-            </div>
-          </div>
         </div>
-      )}
+      </Modal>
+
+      <Modal
+        open={isStaffDetailModalOpen && !!selectedStaff}
+        onClose={closeStaffDetailModal}
+        title="Détails du membre du staff"
+        description="Informations complètes du profil."
+        size="md"
+        hideConfirm
+        cancelLabel="Fermer"
+      >
+        {selectedStaff && (
+        <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Icon icon={UserIcon} className="size-6" />
+                </div>
+                <div>
+                  <p className="text-base font-bold">
+                    {selectedStaff.prenom} {selectedStaff.nom}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {normalizeRoleLabel(selectedStaff.role)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 rounded-xl bg-muted/30 p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Email
+                  </span>
+                  <span className="text-sm font-medium">
+                    {selectedStaff.email}
+                  </span>
+                </div>
+                <div className="h-px bg-border/60" />
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Téléphone
+                  </span>
+                  <span className="text-sm font-medium">
+                    {selectedStaff.telephone || "—"}
+                  </span>
+                </div>
+                <div className="h-px bg-border/60" />
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Adresse cabinet
+                  </span>
+                  <span className="text-sm font-medium text-right max-w-[200px]">
+                    {selectedStaff.adresseCabinet || "—"}
+                  </span>
+                </div>
+                <div className="h-px bg-border/60" />
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Statut connexion
+                  </span>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                      selectedStaff.isFirstConnexion
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-emerald-100 text-emerald-800"
+                    }`}
+                  >
+                    {selectedStaff.isFirstConnexion
+                      ? "Première connexion"
+                      : "Connexion établie"}
+                  </span>
+                </div>
+
+                {selectedStaff.numeroInscription && (
+                  <>
+                    <div className="h-px bg-border/60" />
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        Numéro d'inscription
+                      </span>
+                      <span className="text-sm font-medium">
+                        {selectedStaff.numeroInscription}
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                {selectedStaff.service && (
+                  <>
+                    <div className="h-px bg-border/60" />
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        Service
+                      </span>
+                      <span className="text-sm font-medium">
+                        {selectedStaff.service.nom}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+        </div>
+        )}
+      </Modal>
+
+      <ConfirmationModal
+        open={!!serviceToDelete}
+        onClose={() => setServiceToDelete(null)}
+        onConfirm={handleDeleteServiceConfirmed}
+        title="Confirmer la suppression"
+        description={
+          serviceToDelete
+            ? `Voulez-vous vraiment supprimer le service « ${serviceToDelete.nom} » ?`
+            : undefined
+        }
+        confirmLabel="Supprimer"
+        loading={isDeletingServiceId !== null}
+      />
     </div>
+    </>
   );
 }

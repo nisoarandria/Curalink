@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom"
+import { Logo } from "@/components/ui/logo"
 
 export default function Footer() {
   return (
@@ -35,21 +36,11 @@ export default function Footer() {
 
           {/* BRAND */}
           <div className="space-y-4">
-            <Link to="/" className="flex items-center gap-3 group">
-              <div className="
-                h-9 w-9 flex items-center justify-center
-                rounded-xl
-                bg-gradient-to-r from-cyan-500 to-blue-600
-                shadow-lg shadow-cyan-500/20
-                group-hover:scale-110
-                transition
-              ">
-                +
-              </div>
-              <span className="text-xl font-bold group-hover:text-cyan-400 transition">
-                Curalink
-              </span>
-            </Link>
+            <Logo
+              href="/"
+              size="md"
+              className="group-hover:scale-[1.02] transition-transform [&_p]:text-white group-hover:[&_p]:text-cyan-400"
+            />
 
             <p className="text-sm text-white/60 leading-relaxed">
               Plateforme santé moderne pour une prise en charge rapide et intelligente.

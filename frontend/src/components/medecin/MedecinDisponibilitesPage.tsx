@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import DisponibiliteForm from "@/components/medecin/DisponibiliteForm";
 import DisponibilitesTable from "@/components/medecin/DisponibilitesTable";
 import {
@@ -145,32 +145,15 @@ export default function MedecinDisponibilitesPage() {
         />
       </div>
 
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl border bg-background p-5 shadow-xl">
-            <h3 className="text-base font-semibold">Confirmer la suppression</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Voulez-vous vraiment supprimer cette disponibilité ?
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setDeleteTarget(null)}
-                disabled={isSubmitting}
-              >
-                Annuler
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={handleDeleteConfirmed}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Suppression..." : "Supprimer"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmationModal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirmed}
+        title="Confirmer la suppression"
+        description="Voulez-vous vraiment supprimer cette disponibilité ?"
+        confirmLabel="Supprimer"
+        loading={isSubmitting}
+      />
     </div>
   );
 }

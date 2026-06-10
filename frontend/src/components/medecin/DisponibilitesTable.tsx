@@ -1,5 +1,7 @@
-import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/ui/action-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataLoader } from "@/components/ui/data-loader";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { DisponibiliteDetailResponse } from "@/types/disponibilites";
 
 type Props = {
@@ -45,15 +47,19 @@ export default function DisponibilitesTable({
       </CardHeader>
       <CardContent className="space-y-3">
         {isLoading && (
-          <div className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
-            Chargement des disponibilités...
-          </div>
+          <DataLoader
+            message="Chargement des disponibilités"
+            description="Récupération de votre planning…"
+            size="md"
+          />
         )}
 
         {!isLoading && items.length === 0 && (
-          <div className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
-            Aucune disponibilité enregistrée.
-          </div>
+          <EmptyState
+            title="Aucune  disponibilité"
+            description="Ajoutez vos premières plages horaires pour commencer."
+            size="md"
+          />
         )}
 
         {!isLoading &&
@@ -87,23 +93,17 @@ export default function DisponibilitesTable({
                   >
                     {item.planningValide ? "Validé" : "En attente"}
                   </span>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
+                  <div className="flex gap-1.5">
+                    <ActionButton
+                      action="edit"
                       onClick={() => onEdit(item)}
                       disabled={disableActions}
-                    >
-                      Modifier
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
+                    />
+                    <ActionButton
+                      action="delete"
                       onClick={() => onDelete(item)}
                       disabled={disableActions}
-                    >
-                      Supprimer
-                    </Button>
+                    />
                   </div>
                 </div>
               </div>

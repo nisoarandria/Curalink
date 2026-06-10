@@ -3,9 +3,25 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import ReactQuill from "react-quill-new";
 import "react-quill-new/dist/quill.snow.css";
 import { Button } from "@/components/ui/button";
+import { DataLoader } from "@/components/ui/data-loader";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Logo } from "@/components/ui/logo";
+import { PageLoader } from "@/components/ui/page-loader";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  ArrowLeft01Icon,
+  BookOpen01Icon,
+  Clock01Icon,
+  Delete01Icon,
+  File01Icon,
+  FloppyDiskIcon,
+  Icon,
+  Image01Icon,
+  PencilEdit01Icon,
+  ViewIcon,
+} from "@/components/ui/icon";
 import avatarDefault from "@/assets/avatar.webp";
 import { apiClient, apiClientMultipart } from "@/services/axiosInstance";
 
@@ -296,26 +312,22 @@ export default function ArticleEditorPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F6FA] text-foreground font-sans">
+    <>
+    <PageLoader
+      show={loadingArticle}
+      message="Chargement de l'article"
+      description="Préparation de l'éditeur en cours…"
+    />
+    <div className="min-h-screen bg-slate-50/80 text-foreground font-sans">
       <header className="sticky top-0 z-30 border-b border-border/40 bg-white/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between px-6 py-4 md:px-10">
           <div className="flex items-center gap-4">
+            <Logo size="sm" showText={false} />
             <Link
               to="/nutritionniste"
               className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-white text-muted-foreground transition-colors hover:text-foreground"
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="m15 18-6-6 6-6" />
-              </svg>
+              <Icon icon={ArrowLeft01Icon} className="size-4" strokeWidth={2.5} />
             </Link>
             <div>
               <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
@@ -332,19 +344,7 @@ export default function ArticleEditorPage() {
               className="hidden h-10 gap-2 rounded-full border-muted-foreground/20 bg-white font-semibold md:inline-flex"
               onClick={() => setPreviewMode((v) => !v)}
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
+              <Icon icon={ViewIcon} className="size-3.5" />
               {previewMode ? "Mode édition" : "Aperçu"}
             </Button>
             <Button
@@ -353,20 +353,7 @@ export default function ArticleEditorPage() {
               onClick={handleSave}
               disabled={saving || loadingArticle}
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                <polyline points="17 21 17 13 7 13 7 21" />
-                <polyline points="7 3 7 8 15 8" />
-              </svg>
+              <Icon icon={FloppyDiskIcon} className="size-3.5" />
               {saving ? "Enregistrement..." : loadingArticle ? "Chargement..." : "Enregistrer"}
             </Button>
           </div>
@@ -381,7 +368,7 @@ export default function ArticleEditorPage() {
                 ? "border-emerald-200 bg-emerald-50 text-emerald-900"
                 : notice.type === "error"
                   ? "border-red-200 bg-red-50 text-red-900"
-                  : "border-sky-200 bg-sky-50 text-sky-900"
+                  : "border-primary/20 bg-primary/5 text-primary"
             }`}
           >
             <span className="mt-0.5 text-base leading-none">
@@ -397,14 +384,8 @@ export default function ArticleEditorPage() {
             </button>
           </div>
         )}
-        {loadingArticle ? (
-          <div className="rounded-[24px] border border-border/60 bg-white p-10 text-center">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-muted border-t-primary" />
-            <p className="mt-3 text-sm font-semibold text-muted-foreground">
-              Chargement de l'article...
-            </p>
-          </div>
-        ) : !previewMode ? (
+        {!loadingArticle && (
+          !previewMode ? (
           <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
             {/* Main editor area */}
             <div className="space-y-6">
@@ -422,48 +403,13 @@ export default function ArticleEditorPage() {
                         onClick={() => setImage("")}
                         className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition-colors hover:bg-red-500"
                       >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M3 6h18" />
-                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-                          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                        </svg>
+                        <Icon icon={Delete01Icon} className="size-3.5" strokeWidth={2.5} />
                       </button>
                     </>
                   ) : (
                     <label className="flex h-full w-full cursor-pointer flex-col items-center justify-center gap-3 text-muted-foreground transition-colors hover:bg-primary/5">
                       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="text-primary"
-                        >
-                          <rect
-                            width="18"
-                            height="18"
-                            x="3"
-                            y="3"
-                            rx="2"
-                            ry="2"
-                          />
-                          <circle cx="9" cy="9" r="2" />
-                          <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                        </svg>
+                        <Icon icon={Image01Icon} className="size-6 text-primary" />
                       </div>
                       <div className="text-center">
                         <p className="text-sm font-bold text-foreground">
@@ -498,19 +444,7 @@ export default function ArticleEditorPage() {
 
                   <label className="block">
                     <span className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M12 20h9" />
-                        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                      </svg>
+                      <Icon icon={PencilEdit01Icon} className="size-3" strokeWidth={2.5} />
                       Titre de l'article
                     </span>
                     <div className="group relative rounded-2xl border-2 border-dashed border-border/60 bg-muted/20 transition-all hover:border-primary/40 hover:bg-white focus-within:border-primary focus-within:border-solid focus-within:bg-white focus-within:shadow-[0_0_0_4px_rgb(var(--primary-rgb,99_102_241)/0.08)]">
@@ -537,21 +471,7 @@ export default function ArticleEditorPage() {
                 <div className="border-t border-border/50" />
                 <div className="bg-muted/20 px-8 py-2">
                   <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                      <polyline points="14 2 14 8 20 8" />
-                      <line x1="16" x2="8" y1="13" y2="13" />
-                      <line x1="16" x2="8" y1="17" y2="17" />
-                    </svg>
+                    <Icon icon={File01Icon} className="size-3" strokeWidth={2.5} />
                     Contenu de l'article
                   </span>
                 </div>
@@ -585,24 +505,33 @@ export default function ArticleEditorPage() {
 
                   <div className="space-y-2">
                     <Label className="text-xs font-bold">Pathologie</Label>
-                    <select
-                      className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm font-semibold outline-hidden focus-visible:ring-2 focus-visible:ring-primary/20"
-                      value={rubriqueId ?? ""}
-                      onChange={(e) => setRubriqueId(Number(e.target.value))}
-                      disabled={loadingRubriques || rubriques.length === 0}
-                    >
-                      {loadingRubriques && (
-                        <option value="">Chargement...</option>
-                      )}
-                      {!loadingRubriques && rubriques.length === 0 && (
-                        <option value="">Aucune rubrique disponible</option>
-                      )}
-                      {rubriques.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.titre}
-                        </option>
-                      ))}
-                    </select>
+                    {loadingRubriques ? (
+                      <DataLoader
+                        variant="plain"
+                        size="sm"
+                        layout="row"
+                        message="Chargement des rubriques"
+                      />
+                    ) : rubriques.length === 0 ? (
+                      <EmptyState
+                        variant="plain"
+                        size="sm"
+                        title="Aucune rubrique"
+                        description="Aucune pathologie n'est disponible pour le moment."
+                      />
+                    ) : (
+                      <select
+                        className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm font-semibold outline-hidden focus-visible:ring-2 focus-visible:ring-primary/20"
+                        value={rubriqueId ?? ""}
+                        onChange={(e) => setRubriqueId(Number(e.target.value))}
+                      >
+                        {rubriques.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.titre}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -629,18 +558,7 @@ export default function ArticleEditorPage() {
                     <div className="flex items-center justify-between rounded-xl bg-muted/40 px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600">
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
-                          </svg>
+                          <Icon icon={BookOpen01Icon} className="size-3.5" />
                         </div>
                         <span className="text-xs font-bold">Mots</span>
                       </div>
@@ -649,19 +567,7 @@ export default function ArticleEditorPage() {
                     <div className="flex items-center justify-between rounded-xl bg-muted/40 px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <circle cx="12" cy="12" r="10" />
-                            <polyline points="12 6 12 12 16 14" />
-                          </svg>
+                          <Icon icon={Clock01Icon} className="size-3.5" />
                         </div>
                         <span className="text-xs font-bold">Lecture</span>
                       </div>
@@ -676,20 +582,7 @@ export default function ArticleEditorPage() {
               <Card className="rounded-3xl border-0 bg-linear-to-br from-primary/10 to-primary/5 shadow-[0_2px_10px_-2px_rgba(0,0,0,0.05)]">
                 <CardContent className="p-6">
                   <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M12 20h9" />
-                      <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
-                    </svg>
+                    <Icon icon={PencilEdit01Icon} className="size-[18px]" />
                   </div>
                   <p className="text-sm font-black">Astuce rédaction</p>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -702,7 +595,7 @@ export default function ArticleEditorPage() {
 
             </aside>
           </div>
-        ) : (
+          ) : (
           // Preview mode — marges symétriques + retour à la ligne forcé sur le HTML Quill
           <article className="mx-auto w-full max-w-3xl min-w-0 px-5 sm:px-8">
             <Card className="overflow-hidden rounded-3xl border-0 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.08)]">
@@ -755,6 +648,7 @@ export default function ArticleEditorPage() {
               </div>
             </Card>
           </article>
+          )
         )}
       </div>
 
@@ -827,5 +721,6 @@ export default function ArticleEditorPage() {
         }
       `}</style>
     </div>
+    </>
   );
 }

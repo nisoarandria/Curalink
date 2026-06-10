@@ -5,6 +5,8 @@ import { publicClient, apiClient } from "./axiosInstance";
 export type ServiceOption = {
   id: number;
   nom: string;
+  description?: string;
+  illustrationUrl?: string;
 };
 
 export type MedecinOption = {
@@ -43,6 +45,12 @@ export type RendezVousResponse = {
   patientNomComplet: string;
   medecinId: number;
   medecinNomComplet: string;
+};
+
+export type MedecinRendezVousResponse = RendezVousResponse & {
+  specialite: string;
+  adresseCabinet: string;
+  numeroInscription: string;
 };
 
 export type StaffRole = "MEDECIN" | "NUTRITIONNISTE";
@@ -117,6 +125,20 @@ export async function fetchMyRendezVous(params?: {
   return data;
 }
 
+/** Liste paginée des RDV du médecin connecté */
+export async function fetchMedecinRendezVous(params?: {
+  page?: number;
+  size?: number;
+  q?: string;
+  date?: string;
+  month?: number;
+}) {
+  const { data } = await apiClient.get<
+    PageResponse<MedecinRendezVousResponse>
+  >("/rendezvous/medecin/me", { params });
+  return data;
+}
+
 /** Annuler un RDV (PATIENT) */
 export async function annulerRendezVous(id: number) {
   const { data } = await apiClient.patch<RendezVousResponse>(
@@ -137,6 +159,39 @@ export async function confirmerRendezVous(id: number) {
 export async function refuserRendezVous(id: number) {
   const { data } = await apiClient.patch<RendezVousResponse>(
     `/rendezvous/${id}/refuser`
+  );
+  return data;
+}
+
+/** Proposer le créneau demandé (MEDECIN, EN_ATTENTE → PROPOSE) */
+export async function proposerRendezVous(id: number) {
+  const { data } = await apiClient.patch<MedecinRendezVousResponse>(
+    `/rendezvous/${id}/proposer`,
+  );
+  return data;
+}
+
+/** Proposer un nouveau créneau (MEDECIN) */
+export async function proposerNouveauCreneau(id: number, dateHeure: string) {
+  const { data } = await apiClient.patch<MedecinRendezVousResponse>(
+    `/rendezvous/${id}/proposer-creneau`,
+    { dateHeure },
+  );
+  return data;
+}
+
+/** Terminer un RDV confirmé (MEDECIN, CONFIRME → TERMINE) */
+export async function terminerRendezVous(id: number) {
+  const { data } = await apiClient.patch<MedecinRendezVousResponse>(
+    `/rendezvous/${id}/terminer`,
+  );
+  return data;
+}
+
+/** Marquer le patient absent (MEDECIN, CONFIRME → ABSENT) */
+export async function marquerAbsentRendezVous(id: number) {
+  const { data } = await apiClient.patch<MedecinRendezVousResponse>(
+    `/rendezvous/${id}/absent`,
   );
   return data;
 }

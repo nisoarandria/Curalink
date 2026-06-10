@@ -15,6 +15,7 @@ import com.curalink.repository.ServiceItemRepository;
 import com.curalink.repository.UserRepository;
 import com.curalink.security.AuthenticatedUser;
 import com.curalink.service.mail.PasswordResetMailNotifier;
+import com.curalink.service.notification.RendezVousNotificationPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,16 +37,19 @@ public class RendezVousService {
 	private final UserRepository userRepository;
 	private final ServiceItemRepository serviceItemRepository;
 	private final PasswordResetMailNotifier mailNotifier;
+	private final RendezVousNotificationPublisher notificationPublisher;
 
 	public RendezVousService(
 			RendezVousRepository rendezVousRepository,
 			UserRepository userRepository,
 			ServiceItemRepository serviceItemRepository,
-			PasswordResetMailNotifier mailNotifier) {
+			PasswordResetMailNotifier mailNotifier,
+			RendezVousNotificationPublisher notificationPublisher) {
 		this.rendezVousRepository = rendezVousRepository;
 		this.userRepository = userRepository;
 		this.serviceItemRepository = serviceItemRepository;
 		this.mailNotifier = mailNotifier;
+		this.notificationPublisher = notificationPublisher;
 	}
 
 	@Transactional(readOnly = true)
@@ -147,6 +151,7 @@ public class RendezVousService {
 				patient,
 				medecin,
 				RendezVousStatus.EN_ATTENTE));
+		notificationPublisher.onDemandeRendezVous(saved);
 		return toResponse(saved);
 	}
 
@@ -155,6 +160,7 @@ public class RendezVousService {
 		RendezVous rdv = requireOwnedByMedecin(currentUser, rendezVousId);
 		requireCurrentStatus(rdv, RendezVousStatus.EN_ATTENTE);
 		rdv.setStatus(RendezVousStatus.PROPOSE);
+		notificationPublisher.onPropositionCreneau(rdv, false);
 		return toResponse(rdv);
 	}
 
@@ -171,6 +177,7 @@ public class RendezVousService {
 		}
 		rdv.setDateHeure(nouvelleDateHeure);
 		rdv.setStatus(RendezVousStatus.PROPOSE);
+		notificationPublisher.onPropositionCreneau(rdv, true);
 		return toResponse(rdv);
 	}
 
@@ -186,6 +193,7 @@ public class RendezVousService {
 				rdv.getService().getNom(),
 				rdv.getDateHeure(),
 				rdv.getMedecin().getAdresse());
+		notificationPublisher.onConfirmation(rdv, currentUser);
 		return toResponse(rdv);
 	}
 
@@ -194,6 +202,7 @@ public class RendezVousService {
 		RendezVous rdv = requireOwnedByPatient(currentUser, rendezVousId);
 		requireCurrentStatus(rdv, RendezVousStatus.PROPOSE);
 		rdv.setStatus(RendezVousStatus.REFUSE);
+		notificationPublisher.onRefus(rdv);
 		return toResponse(rdv);
 	}
 
@@ -204,6 +213,7 @@ public class RendezVousService {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Un rendez-vous clôturé ne peut plus être annulé");
 		}
 		rdv.setStatus(RendezVousStatus.ANNULE);
+		notificationPublisher.onAnnulation(rdv, currentUser);
 		return toResponse(rdv);
 	}
 
@@ -212,6 +222,7 @@ public class RendezVousService {
 		RendezVous rdv = requireOwnedByMedecin(currentUser, rendezVousId);
 		requireCurrentStatus(rdv, RendezVousStatus.CONFIRME);
 		rdv.setStatus(RendezVousStatus.TERMINE);
+		notificationPublisher.onTerminaison(rdv);
 		return toResponse(rdv);
 	}
 
@@ -220,6 +231,7 @@ public class RendezVousService {
 		RendezVous rdv = requireOwnedByMedecin(currentUser, rendezVousId);
 		requireCurrentStatus(rdv, RendezVousStatus.CONFIRME);
 		rdv.setStatus(RendezVousStatus.ABSENT);
+		notificationPublisher.onAbsencePatient(rdv);
 		return toResponse(rdv);
 	}
 
@@ -227,6 +239,7 @@ public class RendezVousService {
 	public RendezVousResponse updateStatus(AuthenticatedUser currentUser, long rendezVousId, RendezVousStatus status) {
 		RendezVous rdv = requireOwnedByMedecin(currentUser, rendezVousId);
 		rdv.setStatus(status);
+		notificationPublisher.onChangementStatut(rdv, status);
 		return toResponse(rdv);
 	}
 

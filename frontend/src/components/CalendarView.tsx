@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { ArrowLeft01Icon, ArrowRight01Icon, Icon } from "@/components/ui/icon"
 
 export type CalendarEvent = {
   id: string
@@ -14,9 +15,16 @@ interface CalendarViewProps {
   events: CalendarEvent[]
   onDateClick?: (date: string) => void
   selectedDate?: string
+  /** Si true, seuls les jours avec au moins un événement sont cliquables */
+  requireEventsForDateClick?: boolean
 }
 
-export default function CalendarView({ events, onDateClick, selectedDate }: CalendarViewProps) {
+export default function CalendarView({
+  events,
+  onDateClick,
+  selectedDate,
+  requireEventsForDateClick = false,
+}: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(() => {
     return selectedDate ? new Date(selectedDate) : new Date()
   })
@@ -119,10 +127,10 @@ export default function CalendarView({ events, onDateClick, selectedDate }: Cale
           <h2 className="text-xl font-bold w-48 truncate sm:w-auto">{headerTitle}</h2>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={handlePrev}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+              <Icon icon={ArrowLeft01Icon} className="size-4" />
             </Button>
             <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={handleNext}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+              <Icon icon={ArrowRight01Icon} className="size-4" />
             </Button>
           </div>
         </div>
@@ -172,6 +180,10 @@ export default function CalendarView({ events, onDateClick, selectedDate }: Cale
           const dayEvents = d.fullDate ? events.filter(e => e.date === d.fullDate) : []
           const isToday = d.fullDate === todayStr
           const isSelected = d.fullDate === selectedDate
+          const isDateClickable =
+            !!onDateClick &&
+            !!d.fullDate &&
+            (!requireEventsForDateClick || dayEvents.length > 0)
 
           return (
             <div 
@@ -180,9 +192,9 @@ export default function CalendarView({ events, onDateClick, selectedDate }: Cale
                 relative border-r border-b p-2 transition-colors flex flex-col
                 ${d.isCurrentMonth ? "bg-background" : "bg-muted/10"} 
                 ${isSelected && view === "month" ? "bg-primary/5" : ""}
-                ${onDateClick && d.fullDate ? "cursor-pointer hover:bg-muted/30" : ""}
+                ${isDateClickable ? "cursor-pointer hover:bg-muted/30" : ""}
               `}
-              onClick={() => d.fullDate && onDateClick && onDateClick(d.fullDate)}
+              onClick={() => isDateClickable && onDateClick(d.fullDate)}
             >
               <div className={`flex ${view === "day" ? "justify-center mb-4" : "justify-end mb-1"}`}>
                 <span className={`
@@ -207,11 +219,6 @@ export default function CalendarView({ events, onDateClick, selectedDate }: Cale
                     {evt.title}
                   </div>
                 ))}
-                {view !== "month" && dayEvents.length === 0 && (
-                   <div className="flex items-center justify-center h-full text-sm text-muted-foreground opacity-50 pt-10">
-                     Aucun événement
-                   </div>
-                )}
               </div>
             </div>
           )

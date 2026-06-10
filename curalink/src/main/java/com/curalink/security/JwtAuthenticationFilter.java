@@ -31,22 +31,35 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 			@NonNull HttpServletRequest request,
 			@NonNull HttpServletResponse response,
 			@NonNull FilterChain filterChain) throws ServletException, IOException {
-		String header = request.getHeader(HttpHeaders.AUTHORIZATION);
-		if (header != null && header.regionMatches(true, 0, "Bearer ", 0, 7)) {
-			String token = header.substring(7).trim();
-			if (!token.isEmpty()) {
-				try {
-					Claims claims = jwtService.parseToken(token);
-					AuthenticatedUser principal = jwtService.toAuthenticatedUser(claims);
-					String role = "ROLE_" + principal.userType();
-					var auth = new UsernamePasswordAuthenticationToken(
-							principal, null, List.of(new SimpleGrantedAuthority(role)));
-					SecurityContextHolder.getContext().setAuthentication(auth);
-				} catch (JwtException | IllegalArgumentException ignored) {
-					SecurityContextHolder.clearContext();
-				}
+		String token = resolveToken(request);
+		if (token != null && !token.isEmpty()) {
+			try {
+				Claims claims = jwtService.parseToken(token);
+				AuthenticatedUser principal = jwtService.toAuthenticatedUser(claims);
+				String role = "ROLE_" + principal.userType();
+				var auth = new UsernamePasswordAuthenticationToken(
+						principal, null, List.of(new SimpleGrantedAuthority(role)));
+				SecurityContextHolder.getContext().setAuthentication(auth);
+			} catch (JwtException | IllegalArgumentException ignored) {
+				SecurityContextHolder.clearContext();
 			}
 		}
 		filterChain.doFilter(request, response);
+	}
+
+	/**
+	 * EventSource (SSE) ne peut pas envoyer le header Authorization : on accepte aussi
+	 * {@code access_token} ou {@code token} en query string.
+	 */
+	private static String resolveToken(HttpServletRequest request) {
+		String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+		if (header != null && header.regionMatches(true, 0, "Bearer ", 0, 7)) {
+			return header.substring(7).trim();
+		}
+		String queryToken = request.getParameter("access_token");
+		if (queryToken == null || queryToken.isBlank()) {
+			queryToken = request.getParameter("token");
+		}
+		return queryToken != null ? queryToken.trim() : null;
 	}
 }

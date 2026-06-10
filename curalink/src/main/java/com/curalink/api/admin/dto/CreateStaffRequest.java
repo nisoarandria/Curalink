@@ -1,15 +1,18 @@
 package com.curalink.api.admin.dto;
 
+import com.curalink.validation.MalagasyPhone;
+import com.curalink.validation.ValidCreateStaffRequest;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+@ValidCreateStaffRequest
 public record CreateStaffRequest(
 		@NotBlank @Email String email,
 		@NotBlank String nom,
 		@NotBlank String prenom,
-		@NotBlank String telephone,
+		@NotBlank @MalagasyPhone String telephone,
 		@NotBlank @JsonAlias("adresse") String adresseCabinet,
 		String numeroInscription,
 		@NotNull StaffRole role,

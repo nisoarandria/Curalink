@@ -13,10 +13,13 @@ import com.curalink.model.user.Medecin;
 import com.curalink.model.user.Nutritionniste;
 import com.curalink.model.user.Patient;
 import com.curalink.model.user.User;
+import com.curalink.repository.MedecinRepository;
 import com.curalink.repository.PatientRepository;
 import com.curalink.repository.ServiceItemRepository;
 import com.curalink.repository.UserRepository;
 import com.curalink.service.mail.PasswordResetMailNotifier;
+import com.curalink.validation.MalagasyPhoneValidator;
+import com.curalink.validation.NumeroInscriptionValidator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -41,6 +44,7 @@ public class AdminStaffService {
 
 	private final UserRepository userRepository;
 	private final PatientRepository patientRepository;
+	private final MedecinRepository medecinRepository;
 	private final ServiceItemRepository serviceItemRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final PasswordResetMailNotifier mailNotifier;
@@ -48,11 +52,13 @@ public class AdminStaffService {
 	public AdminStaffService(
 			UserRepository userRepository,
 			PatientRepository patientRepository,
+			MedecinRepository medecinRepository,
 			ServiceItemRepository serviceItemRepository,
 			PasswordEncoder passwordEncoder,
 			PasswordResetMailNotifier mailNotifier) {
 		this.userRepository = userRepository;
 		this.patientRepository = patientRepository;
+		this.medecinRepository = medecinRepository;
 		this.serviceItemRepository = serviceItemRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.mailNotifier = mailNotifier;
@@ -132,15 +138,18 @@ public class AdminStaffService {
 		String initialPassword = generateRandomInitialPassword();
 		String hash = passwordEncoder.encode(initialPassword);
 
+		String telephone = MalagasyPhoneValidator.normalize(request.telephone());
+
 		User saved = switch (request.role()) {
 			case MEDECIN -> {
 				if (request.serviceId() == null) {
 					throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
 							"Le champ serviceId est obligatoire pour la création d’un médecin");
 				}
-				if (!StringUtils.hasText(request.numeroInscription())) {
-					throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-							"Le champ numeroInscription est obligatoire pour la création d’un médecin");
+				String numeroInscription = NumeroInscriptionValidator.normalize(request.numeroInscription());
+				if (medecinRepository.existsByNumeroInscriptionIgnoreCase(numeroInscription)) {
+					throw new ResponseStatusException(HttpStatus.CONFLICT,
+							"Ce numéro d'inscription est déjà utilisé");
 				}
 				ServiceItem service = serviceItemRepository.findById(request.serviceId())
 						.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Service introuvable"));
@@ -148,9 +157,9 @@ public class AdminStaffService {
 						request.nom().trim(),
 						request.prenom().trim(),
 						email,
-						request.telephone().trim(),
+						telephone,
 						request.adresseCabinet().trim(),
-						request.numeroInscription().trim(),
+						numeroInscription,
 						null,
 						service);
 				m.setPasswordHash(hash);
@@ -162,7 +171,7 @@ public class AdminStaffService {
 						request.nom().trim(),
 						request.prenom().trim(),
 						email,
-						request.telephone().trim(),
+						telephone,
 						request.adresseCabinet().trim(),
 						null);
 				n.setPasswordHash(hash);
