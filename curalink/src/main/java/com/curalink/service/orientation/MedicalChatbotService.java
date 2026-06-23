@@ -1,6 +1,7 @@
 package com.curalink.service.orientation;
 
 import com.curalink.config.GeminiProperties;
+import com.curalink.config.GroqProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -15,15 +16,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
-
-import static org.springframework.http.HttpStatus.BAD_GATEWAY;
-import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
-import static org.springframework.http.HttpStatus.TOO_MANY_REQUESTS;
 
 @Service
 public class MedicalChatbotService {
@@ -35,25 +31,42 @@ public class MedicalChatbotService {
 			"Le chatbot medical est momentanement indisponible. Veuillez reessayer dans quelques instants.";
 
 	private final GeminiProperties geminiProperties;
+	private final GroqProperties groqProperties;
 	private final RestTemplate restTemplate;
 	private final ObjectMapper objectMapper;
 
 	public MedicalChatbotService(
 			GeminiProperties geminiProperties,
+			GroqProperties groqProperties,
 			RestTemplateBuilder restTemplateBuilder,
 			ObjectMapper objectMapper) {
 		this.geminiProperties = geminiProperties;
+		this.groqProperties = groqProperties;
 		this.restTemplate = restTemplateBuilder.build();
 		this.objectMapper = objectMapper;
 	}
 
 	public String chatAsHtml(String userMessage) {
-		if (geminiProperties.apiKey() == null || geminiProperties.apiKey().isBlank()
-				|| geminiProperties.url() == null || geminiProperties.url().isBlank()) {
-			throw new ResponseStatusException(INTERNAL_SERVER_ERROR, "Configuration Gemini manquante");
+		String prompt = buildPrompt(userMessage);
+
+		// 1) Gemini par defaut
+		String answer = callGemini(prompt);
+		if (answer != null) {
+			return toHtml(answer);
 		}
 
-		String prompt = """
+		// 2) Fallback Groq si Gemini echoue
+		answer = callGroq(prompt);
+		if (answer != null) {
+			return toHtml(answer);
+		}
+
+		// 3) Message d'indisponibilite uniquement si les deux ont echoue
+		return toHtml(TEMPORARY_UNAVAILABLE_RESPONSE);
+	}
+
+	private String buildPrompt(String userMessage) {
+		return """
 				Tu es un chatbot medical.
 				Ta seule mission: repondre aux questions sur les symptomes et l'orientation medicale.
 				Si la question n'est pas medicale, reponds EXACTEMENT:
@@ -67,6 +80,13 @@ public class MedicalChatbotService {
 				Message utilisateur:
 				%s
 				""".formatted(OFF_TOPIC_RESPONSE, userMessage.trim());
+	}
+
+	private String callGemini(String prompt) {
+		if (!isGeminiConfigured()) {
+			LOGGER.warn("Configuration Gemini manquante — tentative Groq");
+			return null;
+		}
 
 		Map<String, Object> requestBody = Map.of(
 				"contents", List.of(Map.of(
@@ -79,33 +99,78 @@ public class MedicalChatbotService {
 		headers.setContentType(MediaType.APPLICATION_JSON);
 		HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
-		ResponseEntity<String> response;
 		try {
-			response = restTemplate.exchange(
+			ResponseEntity<String> response = restTemplate.exchange(
 					URI.create(geminiProperties.url() + "?key=" + geminiProperties.apiKey()),
 					HttpMethod.POST,
 					entity,
 					String.class);
+			return parseGeminiText(response.getBody());
 		} catch (HttpStatusCodeException e) {
-			LOGGER.warn("Erreur HTTP Gemini: status={}, body={}", e.getStatusCode(), sanitize(e.getResponseBodyAsString()));
-			if (e.getStatusCode() == TOO_MANY_REQUESTS) {
-				return toHtml(TEMPORARY_UNAVAILABLE_RESPONSE);
-			}
-			String reason = "Echec d'appel au chatbot medical IA (%s)".formatted(e.getStatusCode());
-			throw new ResponseStatusException(BAD_GATEWAY, reason);
+			LOGGER.warn(
+					"Erreur HTTP Gemini: status={}, body={} — fallback Groq",
+					e.getStatusCode(),
+					sanitize(e.getResponseBodyAsString()));
+			return null;
 		} catch (ResourceAccessException e) {
-			LOGGER.warn("Erreur reseau Gemini: {}", e.getMessage());
-			return toHtml(TEMPORARY_UNAVAILABLE_RESPONSE);
+			LOGGER.warn("Erreur reseau Gemini: {} — fallback Groq", e.getMessage());
+			return null;
 		} catch (Exception e) {
-			LOGGER.error("Erreur inattendue lors de l'appel Gemini", e);
-			throw new ResponseStatusException(BAD_GATEWAY, "Echec d'appel au chatbot medical IA");
+			LOGGER.warn("Erreur inattendue Gemini: {} — fallback Groq", e.getMessage());
+			return null;
 		}
-
-		String answer = extractGeminiText(response.getBody());
-		return toHtml(answer);
 	}
 
-	private String extractGeminiText(String responseBody) {
+	private String callGroq(String prompt) {
+		if (!isGroqConfigured()) {
+			LOGGER.warn("Configuration Groq manquante — message d'indisponibilite");
+			return null;
+		}
+
+		Map<String, Object> requestBody = Map.of(
+				"model", groqProperties.model(),
+				"messages", List.of(Map.of("role", "user", "content", prompt)),
+				"temperature", 0.2);
+
+		HttpHeaders headers = new HttpHeaders();
+		headers.setContentType(MediaType.APPLICATION_JSON);
+		headers.setBearerAuth(groqProperties.apiKey());
+		HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+		try {
+			ResponseEntity<String> response = restTemplate.exchange(
+					URI.create(groqProperties.url()),
+					HttpMethod.POST,
+					entity,
+					String.class);
+			return parseGroqText(response.getBody());
+		} catch (HttpStatusCodeException e) {
+			LOGGER.warn(
+					"Erreur HTTP Groq: status={}, body={}",
+					e.getStatusCode(),
+					sanitize(e.getResponseBodyAsString()));
+			return null;
+		} catch (ResourceAccessException e) {
+			LOGGER.warn("Erreur reseau Groq: {}", e.getMessage());
+			return null;
+		} catch (Exception e) {
+			LOGGER.warn("Erreur inattendue Groq: {}", e.getMessage());
+			return null;
+		}
+	}
+
+	private boolean isGeminiConfigured() {
+		return geminiProperties.apiKey() != null && !geminiProperties.apiKey().isBlank()
+				&& geminiProperties.url() != null && !geminiProperties.url().isBlank();
+	}
+
+	private boolean isGroqConfigured() {
+		return groqProperties.apiKey() != null && !groqProperties.apiKey().isBlank()
+				&& groqProperties.url() != null && !groqProperties.url().isBlank()
+				&& groqProperties.model() != null && !groqProperties.model().isBlank();
+	}
+
+	private String parseGeminiText(String responseBody) {
 		try {
 			JsonNode root = objectMapper.readTree(responseBody);
 			JsonNode textNode = root.path("candidates").path(0).path("content").path("parts").path(0).path("text");
@@ -114,7 +179,22 @@ public class MedicalChatbotService {
 			}
 			return textNode.asText().trim();
 		} catch (Exception e) {
-			throw new ResponseStatusException(BAD_GATEWAY, "Reponse invalide du chatbot medical IA");
+			LOGGER.warn("Reponse Gemini invalide: {} — fallback Groq", e.getMessage());
+			return null;
+		}
+	}
+
+	private String parseGroqText(String responseBody) {
+		try {
+			JsonNode root = objectMapper.readTree(responseBody);
+			JsonNode textNode = root.path("choices").path(0).path("message").path("content");
+			if (textNode.isMissingNode() || textNode.asText().isBlank()) {
+				return OFF_TOPIC_RESPONSE;
+			}
+			return textNode.asText().trim();
+		} catch (Exception e) {
+			LOGGER.warn("Reponse Groq invalide: {}", e.getMessage());
+			return null;
 		}
 	}
 
