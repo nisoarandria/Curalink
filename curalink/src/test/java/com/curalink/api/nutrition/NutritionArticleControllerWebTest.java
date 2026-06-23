@@ -4,6 +4,7 @@ import com.curalink.api.dto.PageResponse;
 import com.curalink.api.nutrition.dto.ArticleByNutritionnisteResponse;
 import com.curalink.api.nutrition.dto.RubriqueArticleCountResponse;
 import com.curalink.api.nutrition.dto.RubriqueSummary;
+import com.curalink.internal.web.nutrition.NutritionArticleController;
 import com.curalink.security.JwtService;
 import com.curalink.service.nutrition.NutritionArticleService;
 import org.junit.jupiter.api.Test;

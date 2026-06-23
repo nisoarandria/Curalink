@@ -1,4 +1,4 @@
-package com.curalink.api.admin;
+package com.curalink.internal.web.admin;
 
 import com.curalink.api.admin.dto.CreateStaffRequest;
 import com.curalink.api.admin.dto.CreateStaffResponse;

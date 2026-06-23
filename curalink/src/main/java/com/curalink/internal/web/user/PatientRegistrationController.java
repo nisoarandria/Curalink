@@ -1,4 +1,4 @@
-package com.curalink.api.user;
+package com.curalink.internal.web.user;
 
 import com.curalink.api.user.dto.PatientRegistrationRequest;
 import com.curalink.api.user.dto.PatientRegistrationResponse;

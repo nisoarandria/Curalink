@@ -1,4 +1,4 @@
-package com.curalink.api.patient;
+package com.curalink.internal.web.patient;
 
 import com.curalink.api.dto.PageResponse;
 import com.curalink.api.medecin.dto.AntecedentResponse;

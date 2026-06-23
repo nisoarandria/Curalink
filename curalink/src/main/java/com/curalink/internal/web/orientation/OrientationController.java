@@ -1,4 +1,4 @@
-package com.curalink.api.orientation;
+package com.curalink.internal.web.orientation;
 
 import com.curalink.api.orientation.dto.MedicalChatRequest;
 import com.curalink.api.orientation.dto.SymptomOrientationRequest;

@@ -1,4 +1,4 @@
-package com.curalink.api.auth;
+package com.curalink.internal.web.auth;
 
 import com.curalink.api.auth.dto.ChangePasswordRequest;
 import com.curalink.api.auth.dto.LoginRequest;

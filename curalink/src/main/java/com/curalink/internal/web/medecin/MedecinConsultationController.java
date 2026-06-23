@@ -1,4 +1,4 @@
-package com.curalink.api.medecin;
+package com.curalink.internal.web.medecin;
 
 import com.curalink.api.medecin.dto.AntecedentResponse;
 import com.curalink.api.medecin.dto.ConstanteVitaleResponse;

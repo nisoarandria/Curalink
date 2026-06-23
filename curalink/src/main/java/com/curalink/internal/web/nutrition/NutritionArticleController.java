@@ -1,4 +1,4 @@
-package com.curalink.api.nutrition;
+package com.curalink.internal.web.nutrition;
 
 import com.curalink.api.dto.PageResponse;
 import com.curalink.api.nutrition.dto.ArticleByNutritionnisteResponse;

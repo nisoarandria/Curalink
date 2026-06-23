@@ -1,4 +1,4 @@
-package com.curalink.api.rendezvous;
+package com.curalink.internal.web.rendezvous;
 
 import com.curalink.api.dto.PageResponse;
 import com.curalink.api.medecin.dto.UpdateRendezVousStatusRequest;

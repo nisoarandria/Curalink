@@ -1,4 +1,4 @@
-package com.curalink.api.notification;
+package com.curalink.internal.web.notification;
 
 import com.curalink.api.dto.PageResponse;
 import com.curalink.api.notification.dto.NotificationResponse;
